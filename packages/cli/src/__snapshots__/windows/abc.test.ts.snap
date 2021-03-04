@@ -1,0 +1,8 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`abc tests object matches snapshot 1`] = `
+Object {
+  "message": "foo() -- windows platform",
+  "name": "abc test",
+}
+`;
