@@ -127,15 +127,28 @@ export function loadMetroConfig(
   cliConfig: CLIConfig,
   overrides: {
     config?: string;
+    port?: number;
+    projectRoot?: string;
+    watchFolders?: string[];
+    sourceExts?: string[];
     maxWorkers?: number;
     resetCache?: boolean;
     reporter?: Reporter;
+    assetPlugins?: string[];
   }
 ): Promise<ConfigT> {
   const defaultConfig = getDefaultConfig(cliConfig);
+
+  //  apply overrides that loadConfig() doesn't do for us
   if (overrides.reporter) {
     defaultConfig.reporter = overrides.reporter;
   }
+  if (overrides.assetPlugins) {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    defaultConfig.transformer.assetPlugins = assetPlugins;
+  }
+
   return loadConfig(
     {
       cwd: cliConfig.root,
