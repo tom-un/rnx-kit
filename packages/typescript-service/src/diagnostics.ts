@@ -6,7 +6,9 @@ export type DiagnosticWriter = {
   print: (diagnostic: ts.Diagnostic | ts.Diagnostic[]) => void;
 };
 
-export function createDiagnosticWriter(): DiagnosticWriter {
+export function createDiagnosticWriter(
+  logger?: (message: string) => void
+): DiagnosticWriter {
   const formatDiagnosticsHost: ts.FormatDiagnosticsHost = {
     getCurrentDirectory: ts.sys.getCurrentDirectory,
     getCanonicalFileName,
@@ -23,7 +25,12 @@ export function createDiagnosticWriter(): DiagnosticWriter {
   }
 
   function print(diagnostic: ts.Diagnostic | ts.Diagnostic[]) {
-    ts.sys.write(format(diagnostic));
+    const message = format(diagnostic);
+    if (logger) {
+      logger(message);
+    } else {
+      ts.sys.write(message);
+    }
   }
 
   return {
