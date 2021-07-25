@@ -27,9 +27,7 @@ function getTerminalReporterClass(
   }
 }
 
-export function createMetroTerminal(
-  customReporterPath?: string
-): MetroTerminal {
+export function createTerminal(customReporterPath?: string): MetroTerminal {
   const terminal = new Terminal(process.stdout);
 
   const TerminalReporterClass = getTerminalReporterClass(customReporterPath);

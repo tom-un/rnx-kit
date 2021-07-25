@@ -120,22 +120,30 @@ function getDefaultConfig(cliConfig: CLIConfig): InputConfigT {
   return defaultConfig as InputConfigT;
 }
 
-//  Load the Metro configuration, overriding specfic props (if given).
-//  If a config file isn't given, this loads from one of the default
-//  files -- metro.config.js, metro.config.json, or package.json.
+export type MetroConfigOverrides = {
+  config?: string;
+  port?: number;
+  projectRoot?: string;
+  watchFolders?: string[];
+  sourceExts?: string[];
+  maxWorkers?: number;
+  resetCache?: boolean;
+  reporter?: Reporter;
+  assetPlugins?: string[];
+};
+
+/**
+ * Load the Metro configuration and apply overrides. If a config file isn't given,
+ * this loads from one of the default files -- metro.config.hs, metro.config.json,
+ * or package.json.
+ *
+ * @param cliConfig @react-native-community/cli configuration
+ * @param overrides Overrides to apply to the Metro configuration
+ * @returns Overridden Metro configuration
+ */
 export function loadMetroConfig(
   cliConfig: CLIConfig,
-  overrides: {
-    config?: string;
-    port?: number;
-    projectRoot?: string;
-    watchFolders?: string[];
-    sourceExts?: string[];
-    maxWorkers?: number;
-    resetCache?: boolean;
-    reporter?: Reporter;
-    assetPlugins?: string[];
-  }
+  overrides: MetroConfigOverrides
 ): Promise<ConfigT> {
   const defaultConfig = getDefaultConfig(cliConfig);
 
