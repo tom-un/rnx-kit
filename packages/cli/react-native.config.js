@@ -53,10 +53,6 @@ module.exports = {
             "Character encoding to use when writing the bundle file.",
         },
         {
-          name: "--transformer [string]",
-          description: "Specify a custom transformer to be used.",
-        },
-        {
           name: "--dev [boolean]",
           description:
             "If false, warnings are disabled and the bundle is minified.",
@@ -97,11 +93,6 @@ module.exports = {
         {
           name: "--config [string]",
           description: "Path to the Metro configuration file.",
-        },
-        {
-          name: "--verbose",
-          description: "Turn on verbose output.",
-          default: false,
         },
       ],
     },
@@ -153,10 +144,6 @@ module.exports = {
           description:
             "Specifies the maximum number of parallel worker threads to use for transforming files. This defaults to the number of cores available on your machine.",
           parse: parseInt,
-        },
-        {
-          name: "--transformer [string]",
-          description: "Specify a custom transformer to be used.",
         },
         {
           name: "--custom-log-reporter-path [string]",

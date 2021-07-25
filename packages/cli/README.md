@@ -30,7 +30,6 @@ $ yarn react-native rnx-bundle [options]
 | --assets-path [path]                                                               | Path where bundle assets like images are written, either absolute or relative to the kit package.                                                                   |
 | --bundle-prefix [prefix]                                                           | Bundle file prefix. This is followed by the platform and bundle file extension.                                                                                     |
 | --bundle-encoding [`utf8` &#124; `utf16le` &#124; `ascii`]                         | [Character encoding](https://nodejs.org/api/buffer.html#buffer_buffers_and_character_encodings) to use when writing the bundle file.                                |
-| --transformer [string]                                                             | Specify a custom transformer to be used.                                                                                                                            |
 | --dev [boolean]                                                                    | If false, warnings are disabled and the bundle is minified (default: true).                                                                                         |
 | --minify [boolean]                                                                 | Controls whether or not the bundle is minified. Disabling minification is useful for test builds.                                                                   |
 | --experimental-tree-shake [boolean]                                                | Controls whether or not the bundle is tree shaken. Enabling it turns on dead-code elimination, potentially making the bundle smaller. This feature is experimental. |
@@ -39,7 +38,6 @@ $ yarn react-native rnx-bundle [options]
 | --sourcemap-sources-root [string]                                                  | Path to use when relativizing file entries in the bundle source map.                                                                                                |
 | --reset-cache                                                                      | Reset the Metro cache.                                                                                                                                              |
 | --config [string]                                                                  | Path to the Metro configuration file.                                                                                                                               |
-| --verbose                                                                          | Turn on verbose output.                                                                                                                                             |
 | -h, --help                                                                         | Show usage information.                                                                                                                                             |
 
 ## Start a Bundle Server
@@ -62,7 +60,6 @@ $ yarn react-native rnx-start [options]
 | --asset-plugins [list]              | Additional asset plugins to be used by the Metro Babel transformer. Comma-separated list containing plugin modules and/or absolute paths to plugin packages.                     |
 | --source-exts [list]                | Additional source-file extensions to include when generating bundles. Comma-separated list, excluding the leading dot.                                                           |
 | --max-workers [number]              | Specifies the maximum number of parallel worker threads to use for transforming files. This defaults to the number of cores available on your machine.                           |
-| --transformer [string]              | Specify a custom transformer to be used.                                                                                                                                         |
 | --custom-log-reporter-path [string] | Path to a JavaScript file which exports a Metro 'TerminalReporter' function. This replaces the default reporter, which writes all messages to the Metro console.                 |
 | --https                             | Use a secure (https) web server. When not specified, an insecure (http) web server is used.                                                                                      |
 | --key [path]                        | Path to a custom SSL private key file to use for secure (https) communication.                                                                                                   |
