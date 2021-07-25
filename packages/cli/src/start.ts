@@ -108,8 +108,7 @@ export async function rnxStart(
   // prepare for typescript validation, if requested
   let tsprojectInfo: TSProjectInfo | undefined;
   if (serverConfig.typescriptValidation) {
-    const tsservice = new Service();
-    // TODO: TS diagnostic writer must write to the metro terminal
+    const tsservice = new Service((message) => terminal.log(message));
 
     const configFileName = tsservice.findProject(
       metroConfig.projectRoot,
