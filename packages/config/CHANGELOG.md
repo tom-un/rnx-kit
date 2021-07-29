@@ -1,8 +1,24 @@
 # Change Log - @rnx-kit/config
 
-This log was last generated on Mon, 12 Jul 2021 17:30:15 GMT and should not be manually modified.
+This log was last generated on Thu, 29 Jul 2021 19:42:04 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 0.3.3
+
+Thu, 29 Jul 2021 19:42:04 GMT
+
+### Patches
+
+- Bump @rnx-kit/config to v0.3.3 (4123478+tido64@users.noreply.github.com)
+
+## 0.3.2
+
+Mon, 26 Jul 2021 15:59:59 GMT
+
+### Patches
+
+- Add 'core' as an alias for react-native for out-of-tree platform packages that have a dependency on `react-native` core code, and not the Android/iOS specific bits. Currently, one would have to add a random capability that resolves to `react-native`, e.g. `core-android`, despite the capability not really being used. (4123478+tido64@users.noreply.github.com)
 
 ## 0.3.1
 

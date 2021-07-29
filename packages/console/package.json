@@ -1,6 +1,6 @@
 {
   "name": "@rnx-kit/console",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Simple console logger",
   "homepage": "https://github.com/microsoft/rnx-kit/tree/main/packages/console#readme",
   "license": "MIT",
@@ -23,7 +23,7 @@
     "chalk": "^4.1.0"
   },
   "devDependencies": {
-    "@rnx-kit/babel-preset-jest-typescript": "*",
+    "@rnx-kit/jest-preset": "*",
     "@types/jest": "^26.0.0",
     "@types/node": "^14.15.0",
     "rnx-kit-scripts": "*"
@@ -32,6 +32,7 @@
     "extends": "@rnx-kit/eslint-config"
   },
   "jest": {
+    "preset": "@rnx-kit/jest-preset",
     "roots": [
       "test"
     ],
