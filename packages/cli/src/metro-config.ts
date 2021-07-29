@@ -96,8 +96,8 @@ export function customizeMetroConfig(
       for (const module of delta.modified.values()) {
         tsproject.updateFile(module.path);
       }
-      for (const module of delta.modified.values()) {
-        tsproject.removeFile(module.path);
+      for (const module of delta.deleted.values()) {
+        tsproject.removeFile(module);
       }
 
       //  validate the project, printing errors to the console
