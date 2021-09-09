@@ -27,7 +27,7 @@ export function configureJust(): void {
   task("ts", ts);
 
   // hierarchical task definintions
-  task("build", build("clean", "depcheck", "lint", "ts"));
+  task("build", build("clean", "lint", "ts", "depcheck"));
   task("code-style", series("prettier", "lint"));
   task("format", prettier);
   task("update-api-readme", updateApiReadme);
