@@ -2,6 +2,7 @@ import { checkPackageManifest } from "../src/check";
 import profile_0_62 from "../src/profiles/profile-0.62";
 import profile_0_63 from "../src/profiles/profile-0.63";
 import profile_0_64 from "../src/profiles/profile-0.64";
+import { packageVersion } from "./helpers";
 
 jest.mock("fs");
 
@@ -21,9 +22,9 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
   };
 
   const v62_v63_v64 = [
-    profile_0_62["core-ios"].version,
-    profile_0_63["core-ios"].version,
-    profile_0_64["core-ios"].version,
+    packageVersion(profile_0_62, "core"),
+    packageVersion(profile_0_63, "core"),
+    packageVersion(profile_0_64, "core"),
   ].join(" || ");
 
   beforeEach(() => {
@@ -59,10 +60,10 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
       ...mockManifest,
       dependencies: { "react-native-linear-gradient": "0.0.0" },
       peerDependencies: {
-        "react-native": profile_0_64["core-ios"],
+        "react-native": profile_0_64["core"],
       },
       devDependencies: {
-        "react-native": profile_0_64["core-ios"],
+        "react-native": profile_0_64["core"],
       },
     });
     rnxKitConfig.__setMockConfig({ reactNativeVersion: "0.64.0" });
@@ -97,10 +98,10 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
     fs.__setMockContent({
       ...mockManifest,
       peerDependencies: {
-        "react-native": profile_0_64["core-ios"].version,
+        "react-native": packageVersion(profile_0_64, "core"),
       },
       devDependencies: {
-        "react-native": profile_0_64["core-ios"].version,
+        "react-native": packageVersion(profile_0_64, "core"),
       },
     });
     rnxKitConfig.__setMockConfig({
@@ -120,10 +121,10 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
     fs.__setMockContent({
       ...mockManifest,
       peerDependencies: {
-        "react-native": profile_0_64["core-ios"].version,
+        "react-native": packageVersion(profile_0_64, "core"),
       },
       devDependencies: {
-        "react-native": profile_0_64["core-ios"].version,
+        "react-native": packageVersion(profile_0_64, "core"),
       },
     });
     fs.__setMockFileWriter((p, _content) => {
@@ -177,6 +178,27 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
     expect(consoleLogSpy).not.toBeCalled();
   });
 
+  test("preserves indentation in 'package.json'", () => {
+    let output = "";
+
+    fs.__setMockContent(mockManifest, "\t");
+    fs.__setMockFileWriter((_, content) => {
+      output = content;
+    });
+    rnxKitConfig.__setMockConfig({
+      reactNativeVersion: "0.64.0",
+      capabilities: ["core-ios"],
+    });
+
+    expect(
+      checkPackageManifest("package.json", { loose: false, write: true })
+    ).toBe(0);
+    expect(output).toMatchSnapshot();
+    expect(consoleErrorSpy).not.toBeCalled();
+    expect(consoleWarnSpy).not.toBeCalled();
+    expect(consoleLogSpy).not.toBeCalled();
+  });
+
   test("uses minimum supported version as development version", () => {
     fs.__setMockContent({
       ...mockManifest,
@@ -184,7 +206,7 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
         "react-native": v62_v63_v64,
       },
       devDependencies: {
-        "react-native": profile_0_62["core-ios"].version,
+        "react-native": packageVersion(profile_0_62, "core"),
       },
     });
     rnxKitConfig.__setMockConfig({
@@ -205,7 +227,7 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
         "react-native": v62_v63_v64,
       },
       devDependencies: {
-        "react-native": profile_0_63["core-ios"].version,
+        "react-native": packageVersion(profile_0_63, "core"),
       },
     });
     rnxKitConfig.__setMockConfig({
@@ -227,7 +249,7 @@ describe("checkPackageManifest({ kitType: 'library' })", () => {
         "react-native": v62_v63_v64,
       },
       devDependencies: {
-        "react-native": profile_0_63["core-ios"].version,
+        "react-native": packageVersion(profile_0_63, "core"),
       },
     });
     rnxKitConfig.__setMockConfig({

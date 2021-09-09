@@ -1,8 +1,50 @@
 # Change Log - @rnx-kit/dep-check
 
-This log was last generated on Tue, 31 Aug 2021 10:50:41 GMT and should not be manually modified.
+This log was last generated on Wed, 08 Sep 2021 07:04:15 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.8.0
+
+Wed, 08 Sep 2021 07:04:15 GMT
+
+### Minor changes
+
+- Add support for dependencies and meta packages (4123478+tido64@users.noreply.github.com)
+
+## 1.7.11
+
+Wed, 08 Sep 2021 06:42:50 GMT
+
+### Patches
+
+- Also check workspace root package (4123478+tido64@users.noreply.github.com)
+- Bump @rnx-kit/dep-check to v1.7.11 (4123478+tido64@users.noreply.github.com)
+
+## 1.7.10
+
+Mon, 06 Sep 2021 06:57:59 GMT
+
+### Patches
+
+- When upgrading profile version, also remove `reactNativeDevVersion` if `kitType` is `app` (4123478+tido64@users.noreply.github.com)
+
+## 1.7.9
+
+Fri, 03 Sep 2021 12:18:30 GMT
+
+### Patches
+
+- Preserve the indentation when modifying `package.json` (4123478+tido64@users.noreply.github.com)
+- Bump @rnx-kit/dep-check to v1.7.9 (4123478+tido64@users.noreply.github.com)
+
+## 1.7.8
+
+Fri, 03 Sep 2021 09:49:28 GMT
+
+### Patches
+
+- Fix broken `--init` due to loose and init being mutually exclusive, but `--loose` has a default value. (4123478+tido64@users.noreply.github.com)
 
 ## 1.7.7
 

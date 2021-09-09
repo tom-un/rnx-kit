@@ -2,6 +2,87 @@
   "name": "@rnx-kit/cli",
   "entries": [
     {
+      "date": "Wed, 08 Sep 2021 07:04:15 GMT",
+      "tag": "@rnx-kit/cli_v0.9.26",
+      "version": "0.9.26",
+      "comments": {
+        "patch": [
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "commit": "a3f63fb86e5facc1f7251abc116e3d23aca37473",
+            "comment": "Bump @rnx-kit/cli to v0.9.26"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 08 Sep 2021 06:42:50 GMT",
+      "tag": "@rnx-kit/cli_v0.9.25",
+      "version": "0.9.25",
+      "comments": {
+        "none": [
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "comment": "Use repo Jest preset",
+            "commit": "01595b237b2d2c44857385bed84f7bd752e434b3"
+          },
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "commit": "01595b237b2d2c44857385bed84f7bd752e434b3",
+            "comment": "Bump @rnx-kit/cli to v0.9.25"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Mon, 06 Sep 2021 06:57:59 GMT",
+      "tag": "@rnx-kit/cli_v0.9.25",
+      "version": "0.9.25",
+      "comments": {
+        "patch": [
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "commit": "263c7c4d160895f857f6b76b147ad3c6a5e97343",
+            "comment": "Bump @rnx-kit/cli to v0.9.25"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 03 Sep 2021 12:18:30 GMT",
+      "tag": "@rnx-kit/cli_v0.9.24",
+      "version": "0.9.24",
+      "comments": {
+        "patch": [
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "commit": "ced0ef438232d91f7fa527f51e23e6da9e7dbf2c",
+            "comment": "Bump @rnx-kit/cli to v0.9.24"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 03 Sep 2021 09:49:28 GMT",
+      "tag": "@rnx-kit/cli_v0.9.23",
+      "version": "0.9.23",
+      "comments": {
+        "patch": [
+          {
+            "author": "4123478+tido64@users.noreply.github.com",
+            "package": "@rnx-kit/cli",
+            "commit": "73624d095f4e874d5ceee8d123c9b8fedfdf0452",
+            "comment": "Bump @rnx-kit/cli to v0.9.23"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 31 Aug 2021 10:50:41 GMT",
       "tag": "@rnx-kit/cli_v0.9.22",
       "version": "0.9.22",
