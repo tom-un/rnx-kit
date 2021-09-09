@@ -2,7 +2,11 @@
 
 import { findPackage, readPackage } from "@rnx-kit/tools-node";
 import { createResolverHost } from "@rnx-kit/typescript-react-native-resolver";
-import { Service, createDiagnosticWriter } from "@rnx-kit/typescript-service";
+import {
+  Service,
+  createDiagnosticWriter,
+  parseCommandLine,
+} from "@rnx-kit/typescript-service";
 import chalk from "chalk";
 import child_process from "child_process";
 import fs from "fs";
@@ -134,10 +138,10 @@ function cli(): ExitCode {
   }
 
   const diagnosticWriter = createDiagnosticWriter();
-  const service = new Service();
-  const parsedCommandLine = service
-    .getProjectConfigLoader()
-    .parseCommandLine(process.argv.slice(2));
+  const parsedCommandLine = parseCommandLine(
+    process.argv.slice(2),
+    diagnosticWriter
+  );
   if (!parsedCommandLine) {
     return ExitCode.UsageError;
   }
@@ -225,6 +229,7 @@ function cli(): ExitCode {
   // ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd
 
   if (configFileName) {
+    const service = new Service();
     const parsedConfig = service
       .getProjectConfigLoader()
       .load(
