@@ -26,12 +26,17 @@ export class ProjectConfigLoader {
     return ts.findConfigFile(searchPath, ts.sys.fileExists, fileName);
   }
 
-  load(configFileName: string): ProjectConfig {
+  load(
+    configFileName: string,
+    optionsToExtend?: ts.CompilerOptions,
+    watchOptionsToExtend?: ts.WatchOptions
+  ): ProjectConfig {
     const commandLine = ts.getParsedCommandLineOfConfigFile(
       configFileName,
-      {}, // optionsToExtend
+      optionsToExtend,
       this.parseConfigFileHost,
-      this.extendedConfigCache
+      this.extendedConfigCache,
+      watchOptionsToExtend
     );
     if (!commandLine) {
       throw new Error(`Failed to load '${configFileName}'`);
@@ -40,6 +45,19 @@ export class ProjectConfigLoader {
     if (isNonEmptyArray(commandLine.errors)) {
       this.diagnosticWriter.print(commandLine.errors);
       throw new Error(`Failed to load '${configFileName}'`);
+    }
+
+    return commandLine;
+  }
+
+  // TODO: move this to a more appropriate location
+  parseCommandLine(args: string[]): ProjectConfig | undefined {
+    const commandLine = ts.parseCommandLine(args, ts.sys.readFile);
+    if (commandLine) {
+      if (isNonEmptyArray(commandLine.errors)) {
+        this.diagnosticWriter.print(commandLine.errors);
+        return undefined;
+      }
     }
 
     return commandLine;
