@@ -49,17 +49,4 @@ export class ProjectConfigLoader {
 
     return commandLine;
   }
-
-  // TODO: move this to a more appropriate location
-  parseCommandLine(args: string[]): ProjectConfig | undefined {
-    const commandLine = ts.parseCommandLine(args, ts.sys.readFile);
-    if (commandLine) {
-      if (isNonEmptyArray(commandLine.errors)) {
-        this.diagnosticWriter.print(commandLine.errors);
-        return undefined;
-      }
-    }
-
-    return commandLine;
-  }
 }

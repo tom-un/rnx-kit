@@ -5,9 +5,11 @@ import { DiagnosticWriter } from "../src/diagnostics";
 import { ProjectConfigLoader } from "../src/config";
 
 describe("ProjectConfigLoader", () => {
+  const formatMock = jest.fn();
+  const printMock = jest.fn();
   const writer: DiagnosticWriter = {
-    format: jest.fn(),
-    print: jest.fn(),
+    format: formatMock,
+    print: printMock,
   };
 
   const fixturePath = path.join(process.cwd(), "test", "__fixtures__");
@@ -41,9 +43,10 @@ describe("ProjectConfigLoader", () => {
     const configFileName = loader.find(fixturePath, "invalid-tsconfig.json");
     try {
       loader.load(configFileName);
-    } catch {}
-    // @ts-ignore
-    expect(writer.print.mock.calls.length).toBeGreaterThan(0);
+    } catch {
+      // nop
+    }
+    expect(printMock.mock.calls.length).toBeGreaterThan(0);
   });
 
   test("load returns a valid config", () => {
@@ -52,5 +55,27 @@ describe("ProjectConfigLoader", () => {
     const config = loader.load(configFileName);
     expect(config.options.target).toEqual(ts.ScriptTarget.ES2015);
     expect(config.options.module).toEqual(ts.ModuleKind.CommonJS);
+  });
+
+  test("load applies optionsToExtend to the config", () => {
+    const loader = new ProjectConfigLoader(writer);
+    const configFileName = loader.find(fixturePath, "valid-tsconfig.json");
+    const optionsToExtend: ts.CompilerOptions = {
+      types: ["abc", "def"],
+    };
+    const config = loader.load(configFileName, optionsToExtend);
+    expect(config.options.types).toEqual(optionsToExtend.types);
+  });
+
+  test("load applies watchOptionsToExtend to the config", () => {
+    const loader = new ProjectConfigLoader(writer);
+    const configFileName = loader.find(fixturePath, "valid-tsconfig.json");
+    const watchOptionsToExtend: ts.WatchOptions = {
+      excludeFiles: ["abc", "def"],
+    };
+    const config = loader.load(configFileName, undefined, watchOptionsToExtend);
+    expect(config.watchOptions.excludeFiles).toEqual(
+      watchOptionsToExtend.excludeFiles
+    );
   });
 });

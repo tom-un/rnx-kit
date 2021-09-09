@@ -1,4 +1,5 @@
 export * from "./cache";
+export * from "./command-line";
 export * from "./config";
 export * from "./diagnostics";
 export * from "./project";
