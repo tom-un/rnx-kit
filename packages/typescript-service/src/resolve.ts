@@ -1,5 +1,12 @@
 import ts from "typescript";
 
+export { Extension } from "typescript";
+export type ResolvedModuleFull = ts.ResolvedModuleFull;
+export type ResolvedProjectReference = ts.ResolvedProjectReference;
+export type ResolvedModuleWithFailedLookupLocations =
+  ts.ResolvedModuleWithFailedLookupLocations;
+export type ResolvedTypeReferenceDirective = ts.ResolvedTypeReferenceDirective;
+
 /**
  * Host interface which allows TypeScript to ask for module and type-reference resolution.
  */
@@ -15,8 +22,8 @@ export type ResolverHost = {
     moduleNames: string[],
     containingFile: string,
     reusedNames: string[] | undefined,
-    redirectedReference?: ts.ResolvedProjectReference
-  ) => (ts.ResolvedModuleFull | undefined)[];
+    redirectedReference?: ResolvedProjectReference
+  ) => (ResolvedModuleFull | undefined)[];
 
   /**
    * Query the host's module resolution cache for information about a specific module.
@@ -28,7 +35,7 @@ export type ResolverHost = {
   getResolvedModuleWithFailedLookupLocationsFromCache: (
     moduleName: string,
     containingFile: string
-  ) => ts.ResolvedModuleWithFailedLookupLocations | undefined;
+  ) => ResolvedModuleWithFailedLookupLocations | undefined;
 
   /**
    * Resolve a set of "type" reference directives to their TypeScript declaration (`.d.ts`) files.
@@ -43,8 +50,8 @@ export type ResolverHost = {
   resolveTypeReferenceDirectives: (
     typeDirectiveNames: string[],
     containingFile: string,
-    redirectedReference?: ts.ResolvedProjectReference
-  ) => (ts.ResolvedTypeReferenceDirective | undefined)[];
+    redirectedReference?: ResolvedProjectReference
+  ) => (ResolvedTypeReferenceDirective | undefined)[];
 };
 
 /**
