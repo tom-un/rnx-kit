@@ -21,7 +21,9 @@
   },
   "dependencies": {
     "@rnx-kit/tools-node": "^1.1.3",
-    "@rnx-kit/typescript-service": "^1.3.5"
+    "@rnx-kit/typescript-service": "^1.3.5",
+    "lodash": "^4.17.21",
+    "workspace-tools": "^0.16.2"
   },
   "devDependencies": {
     "@rnx-kit/jest-preset": "*",

@@ -10,6 +10,7 @@ import {
 import chalk from "chalk";
 import child_process from "child_process";
 import fs from "fs";
+import isString from "lodash/isString";
 import os from "os";
 import path from "path";
 
@@ -20,12 +21,29 @@ function usage() {
   const scriptName = path.basename(process.argv[1]);
   console.log(
     chalk.whiteBright("USAGE: ") +
-      chalk.white(
-        scriptName +
-          " --platform <android|ios|windows|macos|win32> [tsc command-line]" +
-          os.EOL
-      )
+      chalk.white(scriptName + " [options] [tsc command-line]") +
+      os.EOL
   );
+  console.log(chalk.whiteBright("OPTIONS") + os.EOL);
+  console.log(
+    chalk.white(
+      "  --platform <android|ios|windows|macos|win32>                     [required]"
+    )
+  );
+  console.log(
+    chalk.white(
+      "  --disableReactNativePackageSubstitution                          [optional]"
+    )
+  );
+  console.log("");
+
+  const pkgFile = findPackage(__dirname);
+  if (pkgFile) {
+    const { homepage } = readPackage(pkgFile);
+    if (isString(homepage)) {
+      console.log(chalk.white(`Full documentation: ${homepage}`) + os.EOL);
+    }
+  }
 }
 
 function tsc(...args: string[]): number | undefined {
@@ -118,7 +136,7 @@ function errorUnsupportTscOption(optionName: string): ExitCode {
 }
 
 function cli(): ExitCode {
-  // Platform
+  // Platform (required)
   const idxPlatform = process.argv.indexOf("--platform");
   if (idxPlatform === -1 || idxPlatform === process.argv.length - 1) {
     usage();
@@ -127,9 +145,19 @@ function cli(): ExitCode {
   const platform = process.argv[idxPlatform + 1];
   process.argv.splice(idxPlatform, 2);
 
-  // TSC command line
+  // Disable react-native package substitution (optional)
+  const idxDisableRNSub = process.argv.indexOf(
+    "--disableReactNativePackageSubstitution"
+  );
+  let disableReactNativePackageSubstitution = false;
+  if (idxDisableRNSub !== -1) {
+    disableReactNativePackageSubstitution = true;
+    process.argv.splice(idxDisableRNSub, 1);
+  }
 
   if (process.argv.length > 0) {
+    // TSC command line
+
     if (process.argv[0].toLowerCase() === "--build") {
       return errorUnsupportTscCliArgument("--build");
     } else if (process.argv[0].toLowerCase() === "-b") {
@@ -237,7 +265,7 @@ function cli(): ExitCode {
         parsedCommandLine.options,
         parsedCommandLine.watchOptions
       );
-    if (parsedCommandLine.options.showConfig) {
+    if (parsedConfig.options.showConfig) {
       return errorUnsupportTscOption("showConfig");
     }
     if (
@@ -277,7 +305,7 @@ function cli(): ExitCode {
       return errorUnsupportTscOption("composite");
     }
 
-    return emit(parsedConfig, platform);
+    return emit(parsedConfig, platform, disableReactNativePackageSubstitution);
   }
   // no config file -- just file names on the command-line
 
@@ -308,12 +336,17 @@ function cli(): ExitCode {
     return errorUnsupportTscOption("composite");
   }
 
-  return emit(parsedCommandLine, platform);
+  return emit(
+    parsedCommandLine,
+    platform,
+    disableReactNativePackageSubstitution
+  );
 }
 
 function emit(
   parsedCommandLine: ts.ParsedCommandLine,
-  platform: string
+  platform: string,
+  disableReactNativePackageSubstitution: boolean
 ): ExitCode {
   const compilerHost = ts.createCompilerHost(parsedCommandLine.options);
 
@@ -321,10 +354,15 @@ function emit(
   // changeCompilerHostLikeToUseCache -- assuming this is only an optimization
 
   // Configure the compiler host to use the react-native module/type resolvers
-  const resolverHost = createResolverHost(parsedCommandLine, platform);
-  compilerHost.resolveModuleNames = resolverHost.resolveModuleNames;
+  const resolverHost = createResolverHost(
+    parsedCommandLine,
+    platform,
+    disableReactNativePackageSubstitution
+  );
+  compilerHost.resolveModuleNames =
+    resolverHost.resolveModuleNames.bind(resolverHost);
   compilerHost.resolveTypeReferenceDirectives =
-    resolverHost.resolveTypeReferenceDirectives;
+    resolverHost.resolveTypeReferenceDirectives.bind(resolverHost);
 
   const programOptions = {
     rootNames: parsedCommandLine.fileNames,
