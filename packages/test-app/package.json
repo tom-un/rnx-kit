@@ -33,7 +33,7 @@
     "@react-native-community/cli-platform-android": "^6.0.0-0",
     "@react-native-community/cli-platform-ios": "^6.0.0-0",
     "@rnx-kit/babel-preset-metro-react-native": "*",
-    "@rnx-kit/cli": "*",
+    "@rnx-kit/cli": "^0.9.30-1jstest.1",
     "@rnx-kit/metro-config": "*",
     "@rnx-kit/metro-plugin-cyclic-dependencies-detector": "*",
     "@rnx-kit/metro-plugin-duplicates-checker": "*",
