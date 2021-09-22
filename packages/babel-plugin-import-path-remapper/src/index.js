@@ -4,6 +4,7 @@
 
 const { types } = require("@babel/core");
 const { declare } = require("@babel/helper-plugin-utils");
+const { parseModuleRef } = require("@rnx-kit/tools-node/module");
 
 /**
  * @template T
@@ -52,42 +53,51 @@ function findMainSourceFile(sourcePath) {
  * @param {NodePath<CallExpression>} path
  * @param {string} source
  */
-function replaceCallWith(path, source) {
-  const expression = types.isImport(path.node.callee)
-    ? types.import()
-    : types.identifier("require");
-  path.replaceWith(
-    types.callExpression(expression, [types.stringLiteral(source)])
-  );
+function updateCallWith(path, source) {
+  const firstArgument = path.node.arguments[0];
+  if (types.isStringLiteral(firstArgument)) {
+    firstArgument.value = source;
+  }
 }
 
 /**
  * Replaces the source string in specified import/export declaration.
- * @param {NodePath<Node>} path
+ * @param {NodePath<ImportExportDeclarationNodePath>} path
  * @param {string} source
  */
-function replaceDeclarationWith(path, source) {
-  path.replaceWith(
-    (() => {
-      switch (path.node.type) {
-        case "ExportAllDeclaration":
-          return types.exportAllDeclaration(types.stringLiteral(source));
-        case "ExportNamedDeclaration":
-          return types.exportNamedDeclaration(
-            path.node.declaration,
-            path.node.specifiers,
-            types.stringLiteral(source)
-          );
-        case "ImportDeclaration":
-          return types.importDeclaration(
-            path.node.specifiers,
-            types.stringLiteral(source)
-          );
-        default:
-          throw new Error(`Unhandled declaration type: ${path.node.type}`);
+function updateDeclarationWith(path, source) {
+  path.node.source.value = source;
+}
+
+/**
+ * @template T
+ * @param {string} sourcePath
+ * @param {NodePath<T>} path
+ * @param {(path: NodePath<T>, source: string) => void} updater
+ */
+function update(sourcePath, path, updater) {
+  const m = parseModuleRef(sourcePath);
+  if (!("name" in m)) {
+    // This is not a module reference. Ignore.
+    return;
+  }
+
+  const { scope, name: moduleName, path: modulePath } = m;
+  if (!modulePath) {
+    // Remaps @scope/example -> @scope/example/src/index.ts
+    try {
+      const mainSourceFile = findMainSourceFile(sourcePath);
+      if (mainSourceFile) {
+        updater(path, mainSourceFile);
       }
-    })()
-  );
+    } catch (_) {
+      /* ignore */
+    }
+  } else if (modulePath === "lib" || modulePath.startsWith("lib")) {
+    // Remaps @scope/example/lib/index.js -> @scope/example/src/index.ts
+    const name = scope ? `${scope}/${moduleName}` : moduleName;
+    updater(path, `${name}/${modulePath.replace("lib", "src")}`);
+  }
 }
 
 module.exports = declare((api, options) => {
@@ -100,9 +110,6 @@ module.exports = declare((api, options) => {
       "Expected option `test` to be a function `(source: string) => boolean`"
     );
   }
-
-  const re = /(.*?)\/lib/;
-  const replacement = "$1/src";
 
   return {
     name: "import-path-remapper",
@@ -122,20 +129,7 @@ module.exports = declare((api, options) => {
           return;
         }
 
-        if (sourcePath.includes("/lib")) {
-          // Remaps @scope/example/lib/index.js -> @scope/example/src/index.ts
-          replaceCallWith(path, sourcePath.replace(re, replacement));
-        } else {
-          // Remaps @scope/example -> @scope/example/src/index.ts
-          try {
-            const mainSourceFile = findMainSourceFile(sourcePath);
-            if (mainSourceFile) {
-              replaceCallWith(path, mainSourceFile);
-            }
-          } catch (_) {
-            /* ignore */
-          }
-        }
+        update(sourcePath, path, updateCallWith);
       },
 
       /** @type {(path: ImportExportDeclarationNodePath, state: unknown) => void} */
@@ -150,20 +144,7 @@ module.exports = declare((api, options) => {
           return;
         }
 
-        if (sourcePath.includes("/lib")) {
-          // Remaps @scope/example/lib/index.js -> @scope/example/src/index.ts
-          replaceDeclarationWith(path, sourcePath.replace(re, replacement));
-        } else {
-          // Remaps @scope/example -> @scope/example/src/index.ts
-          try {
-            const mainSourceFile = findMainSourceFile(sourcePath);
-            if (mainSourceFile) {
-              replaceDeclarationWith(path, mainSourceFile);
-            }
-          } catch (_) {
-            /* ignore */
-          }
-        }
+        update(sourcePath, path, updateDeclarationWith);
       },
     },
   };
