@@ -16,9 +16,12 @@ import {
   PackageModuleRef,
   readPackage,
   getMangledPackageName,
+  FileModuleRef,
 } from "@rnx-kit/tools-node";
 import fs from "fs";
 import isString from "lodash/isString";
+import { builtinModules } from "module";
+import os from "os";
 import path from "path";
 import { getWorkspaces, WorkspaceInfo } from "workspace-tools";
 
@@ -39,23 +42,6 @@ function isDirectory(p: string): boolean {
 
 function isFile(p: string): boolean {
   return statSync(p)?.isFile() ?? false;
-}
-
-/**
- * Given a platform, get the list of platform override extensions to use when
- * resolving a module to a file. The extensions are sorted from highest
- * precedence (index 0) to lowest.
- *
- * @param platform Platform
- * @returns Sorted array of platform override extensions
- */
-export function getPlatformOverrideExtensions(platform: string): string[] {
-  const exts = ["." + platform];
-  if (platform === "win32" || platform === "windows") {
-    exts.push(".win");
-  }
-  exts.push(".native");
-  return exts;
 }
 
 /**
@@ -107,10 +93,25 @@ type WorkspaceModuleRef = {
   path?: string;
 };
 
-type ModuleFile = {
-  path: string;
-  extension: ResolvedModuleFull["extension"];
-};
+class ResolverLog {
+  private messages: string[];
+
+  constructor() {
+    this.messages = [];
+  }
+
+  log(message: string): void {
+    this.messages.push(message);
+  }
+
+  serialize(): string {
+    return this.messages.join(os.EOL);
+  }
+
+  clear(): void {
+    this.messages = [];
+  }
+}
 
 /**
  * Implementation of ResolverHost for use with react-native applications.
@@ -123,34 +124,57 @@ class ReactNativeResolverHost {
   private reactNativePackageName: string | undefined;
   private workspaces: WorkspaceInfo;
   private defaultResolverHost: ResolverHost;
+  private extensionsDtsOnly: Extension[];
+  private extensionsAll: Extension[];
+  private resolverLog: ResolverLog | undefined;
+  private showResolverLogOnSuccess: boolean;
+  private showResolverLogOnFailure: boolean;
 
   constructor(
     platform: string,
+    platformExtensions: string[],
     disableReactNativePackageSubstitution: boolean,
+    verbose: boolean,
     options: ProjectConfig["options"]
   ) {
     this.platform = platform.toLowerCase();
     this.disableReactNativePackageSubstitution =
       disableReactNativePackageSubstitution;
     this.options = options;
-    this.platformExtensions = getPlatformOverrideExtensions(this.platform);
+    this.platformExtensions = [this.platform, ...platformExtensions].map(
+      (e) => `.${e}` // prepend a '.' to each extension
+    );
     this.reactNativePackageName = getReactNativePackageName(this.platform);
     this.workspaces = getWorkspaces(process.cwd());
     this.defaultResolverHost = createDefaultResolverHost(options);
+    this.extensionsDtsOnly = [Extension.Dts];
+    this.extensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
+    if (this.options.checkJs) {
+      this.extensionsAll.push(Extension.Js, Extension.Jsx);
+    }
+    if (this.options.resolveJsonModule) {
+      this.extensionsAll.push(Extension.Json);
+    }
+    this.showResolverLogOnSuccess = !!this.options.traceResolution;
+    this.showResolverLogOnFailure = !!this.options.traceResolution || verbose;
+    this.resolverLog =
+      this.showResolverLogOnSuccess || this.showResolverLogOnFailure
+        ? new ResolverLog()
+        : undefined;
   }
 
   private isFile(p: string): boolean {
     const result = isFile(p);
-    if (!result && this.options.traceResolution) {
-      console.log(`File ${p} does not exist.`);
+    if (!result && this.resolverLog) {
+      this.resolverLog.log(`File ${p} does not exist.`);
     }
     return result;
   }
 
   private isDirectory(p: string): boolean {
     const result = isDirectory(p);
-    if (!result && this.options.traceResolution) {
-      console.log(`Directory ${p} does not exist.`);
+    if (!result && this.resolverLog) {
+      this.resolverLog.log(`Directory ${p} does not exist.`);
     }
     return result;
   }
@@ -186,8 +210,8 @@ class ReactNativeResolverHost {
     }
 
     const replaced = this.reactNativePackageName + m.substring(rn.length);
-    if (this.options.traceResolution) {
-      console.log(`Substituting module '${m}' with '${replaced}'.`);
+    if (this.resolverLog) {
+      this.resolverLog.log(`Substituting module '${m}' with '${replaced}'.`);
     }
     return replaced;
   }
@@ -263,7 +287,7 @@ class ReactNativeResolverHost {
    * list. If so, stop there, and return a path to the module file or
    * `undefined` if the file doesn't exist.
    *
-   * Now perform a more broad search. Combine each platform override with
+   * Next, perform a more broad search. Combine each platform override with
    * each extension, preferring a platform override match before moving to the
    * next extension. Return as soon as an existing module file is found.
    *
@@ -281,7 +305,7 @@ class ReactNativeResolverHost {
     searchDir: string,
     modulePath: string,
     extensions: Extension[]
-  ): ModuleFile | undefined {
+  ): ResolvedModuleFull | undefined {
     // TODO: security: if join(searchDir, modulePath) takes you outside of searchDir, return undefined without touching the disk
 
     //
@@ -291,7 +315,7 @@ class ReactNativeResolverHost {
     const extension = getExtensionFromPath(modulePath);
     if (extension && extensions.indexOf(extension) !== -1) {
       const p = path.join(searchDir, modulePath);
-      return this.isFile(p) ? { path: p, extension } : undefined;
+      return this.isFile(p) ? { resolvedFileName: p, extension } : undefined;
     }
 
     //
@@ -307,7 +331,7 @@ class ReactNativeResolverHost {
         const p = path.join(searchDir, `${modulePath}${pext}${ext}`);
         if (this.isFile(p)) {
           return {
-            path: p,
+            resolvedFileName: p,
             extension: ext,
           };
         }
@@ -329,6 +353,209 @@ class ReactNativeResolverHost {
     return undefined;
   }
 
+  /**
+   * Resolve a module reference within a given package directory.
+   *
+   * If a module path is given, use that to find the corresponding module
+   * file.
+   *
+   * Otherwise, consult `package.json` for properties which refer to
+   * "entry points" within the package (e.g. `types`, `typings` and `main`).
+   * If those properties don't resolve the module, then fall back to looking
+   * for an "index" file.
+   *
+   * @param packageDir Root of the package which contains the module
+   * @param modulePath Optional relative path to the module
+   * @param extensions List of allowed module file extensions
+   * @returns Resolved module, or `undefined` if resolution fails
+   */
+  private resolveModule(
+    packageDir: string,
+    modulePath: string | undefined,
+    extensions: Extension[]
+  ): ResolvedModuleFull | undefined {
+    //  A module path was given. Use that to resolve the module to a file.
+    if (modulePath) {
+      return this.findModuleFile(packageDir, modulePath, extensions);
+    }
+
+    let module: ResolvedModuleFull | undefined;
+
+    //  No path was given. Try resolving the module using package.json
+    //  properties.
+    const { types, typings, main } = readPackage(packageDir);
+
+    //  Only consult 'types' and 'typings' properties when looking for
+    //  type files (.d.ts).
+    if (extensions.indexOf(Extension.Dts) !== -1) {
+      if (isString(types)) {
+        if (this.resolverLog) {
+          this.resolverLog.log(`Package has 'types' field '${types}'.`);
+        }
+        module = this.findModuleFile(packageDir, types, extensions);
+      } else if (isString(typings)) {
+        if (this.resolverLog) {
+          this.resolverLog.log(`Package has 'typings' field '${typings}'.`);
+        }
+        module = this.findModuleFile(packageDir, typings, extensions);
+      }
+    }
+    if (!module && isString(main)) {
+      if (this.resolverLog) {
+        this.resolverLog.log(`Package has 'main' field '${main}'.`);
+      }
+      module = this.findModuleFile(packageDir, main, extensions);
+    }
+
+    //  Properties from package.json weren't able to resolve the module.
+    //  Try resolving it to an "index" file.
+    if (!module) {
+      if (this.resolverLog) {
+        this.resolverLog.log(`Searching for index file.`);
+      }
+      module = this.findModuleFile(packageDir, "index", extensions);
+    }
+
+    return module;
+  }
+
+  /**
+   * This module is part of a workspace (in-repo package). Search for it
+   * within that package.
+   *
+   * @param moduleRef Module to resolve
+   * @param extensions List of allowed module file extensions
+   * @returns Resolved module, or `undefined` if resolution fails
+   */
+  private resolveWorkspaceModule(
+    moduleRef: WorkspaceModuleRef,
+    extensions: Extension[]
+  ): ResolvedModuleFull | undefined {
+    if (this.resolverLog) {
+      this.resolverLog.log(
+        `Loading module from workspace package '${moduleRef.workspace.name}'.`
+      );
+    }
+
+    return this.resolveModule(
+      moduleRef.workspace.path,
+      moduleRef.path,
+      extensions
+    );
+  }
+
+  /**
+   * The module refers to an external package.
+   *
+   * Search for the package under node_modules, starting from the given search
+   * directory, and moving up through each parent. If found, resolve the module
+   * to a file within the package.
+   *
+   * If the module wasn't resolved, repeat the process using the corresponding
+   * at-types package.
+   *
+   * @param moduleRef Module to resolve
+   * @param searchDir Directory to start searching for the module's package
+   * @param extensions List of allowed module file extensions
+   * @returns Resolved module, or `undefined` if resolution fails
+   */
+  private resolvePackageModule(
+    moduleRef: PackageModuleRef,
+    searchDir: string,
+    extensions: Extension[]
+  ): ResolvedModuleFull | undefined {
+    let module: ResolvedModuleFull | undefined = undefined;
+
+    // Resolve the module to a file within the package
+    const pkgDir = findPackageDependencyDir(moduleRef, {
+      startDir: searchDir,
+      // TODO: stopDir ==> workspace root? security & perf
+    });
+    if (pkgDir) {
+      if (this.resolverLog) {
+        this.resolverLog.log(
+          `Loading module from external package '${pkgDir}'.`
+        );
+      }
+
+      module = this.resolveModule(pkgDir, moduleRef.path, extensions);
+    }
+
+    if (!module) {
+      // Resolve the module to a file within the corresponding @types package
+      const typesModuleRef: PackageModuleRef = {
+        scope: "@types",
+        name: getMangledPackageName(moduleRef),
+        path: moduleRef.path,
+      };
+      const typesPkgDir = findPackageDependencyDir(typesModuleRef, {
+        startDir: searchDir,
+        // TODO: stopDir ==> workspace root? security & perf
+      });
+      if (typesPkgDir) {
+        if (this.resolverLog) {
+          this.resolverLog.log(
+            `Loading module from external @types package '${typesPkgDir}'.`
+          );
+        }
+
+        module = this.resolveModule(
+          typesPkgDir,
+          typesModuleRef.path,
+          this.extensionsDtsOnly
+        );
+      }
+    }
+
+    return module;
+  }
+
+  /**
+   * This module refers to a specific file.
+   *
+   * Search for it using the given directory.
+   *
+   * @param moduleRef Module to resolve
+   * @param searchDir Directory to search for the module file
+   * @param extensions List of allowed module file extensions
+   * @returns Resolved module, or `undefined` if module fails
+   */
+  private resolveFileModule(
+    moduleRef: FileModuleRef,
+    searchDir: string,
+    extensions: Extension[]
+  ): ResolvedModuleFull | undefined {
+    if (this.resolverLog) {
+      this.resolverLog.log(`Loading module from directory '${searchDir}'.`);
+    }
+
+    return this.findModuleFile(searchDir, moduleRef.path, extensions);
+  }
+
+  /**
+   * Decide whether or not to show failure information for the named module.
+   *
+   * @param moduleName Module
+   */
+  private shouldShowResolverFailure(moduleName: string): boolean {
+    // ignore resolver errors for built-in node modules
+    if (
+      builtinModules.indexOf(moduleName) !== -1 ||
+      moduleName === "fs/promises" // doesn't show up in the list, but it's a built-in
+    ) {
+      return false;
+    }
+
+    // ignore resolver errors for multimedia files
+    const multimediaExts =
+      /\.(aac|aiff|bmp|caf|gif|html|jpeg|jpg|m4a|m4v|mov|mp3|mp4|mpeg|mpg|obj|otf|pdf|png|psd|svg|ttf|wav|webm|webp)$/i;
+    if (path.extname(moduleName).match(multimediaExts)) {
+      return false;
+    }
+
+    return true;
+  }
+
   //
   //  ResolverHost API
   //
@@ -339,29 +566,20 @@ class ReactNativeResolverHost {
     _reusedNames: string[] | undefined,
     _redirectedReference?: ResolvedProjectReference
   ): (ResolvedModuleFull | undefined)[] {
-    const ExtensionsDtsOnly = [Extension.Dts];
-    const ExtensionsSourceOnly = [Extension.Ts, Extension.Tsx];
-    const ExtensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
-    if (this.options.checkJs) {
-      ExtensionsSourceOnly.push(Extension.Js, Extension.Jsx);
-      ExtensionsAll.push(Extension.Js, Extension.Jsx);
-    }
-    if (this.options.resolveJsonModule) {
-      ExtensionsSourceOnly.push(Extension.Json);
-      ExtensionsAll.push(Extension.Json);
-    }
-
     //
     //  If the containing file is a type file (.d.ts), it can only import
     //  other type files. Restrict module resolution accordingly.
     //
-    const containingFileIsDts = hasExtension(containingFile, Extension.Dts);
+    const extensions = hasExtension(containingFile, Extension.Dts)
+      ? this.extensionsDtsOnly
+      : this.extensionsAll;
 
     const resolutions: (ResolvedModuleFull | undefined)[] = [];
 
     for (let moduleName of moduleNames) {
-      if (this.options.traceResolution) {
-        console.log(
+      if (this.resolverLog) {
+        this.resolverLog.clear();
+        this.resolverLog.log(
           `======= Resolving module '${moduleName}' from '${containingFile}' =======`
         );
       }
@@ -372,356 +590,57 @@ class ReactNativeResolverHost {
       //
       moduleName = this.replaceReactNativePackageName(moduleName);
 
+      let module: ResolvedModuleFull | undefined = undefined;
+
       const workspaceRef = this.queryWorkspaceModuleRef(
         moduleName,
         containingFile
       );
       if (workspaceRef) {
-        if (this.options.traceResolution) {
-          console.log(
-            `Loading module '${moduleName}' from package '${workspaceRef.workspace.name}'.`
+        module = this.resolveWorkspaceModule(workspaceRef, extensions);
+      } else {
+        const moduleRef = parseModuleRef(moduleName);
+        if (isPackageModuleRef(moduleRef)) {
+          module = this.resolvePackageModule(
+            moduleRef,
+            path.dirname(containingFile),
+            extensions
           );
-        }
-
-        let moduleFile: ModuleFile | undefined;
-        //
-        //  This module is part of a workspace (in-repo package).
-        //  Search for it within that package. Only look for source files
-        //  (ts[x], js[x], json). Don't look for type files (.d.ts).
-        //
-        //    NOTE: For modules which don't include a path (e.g. just
-        //          the package name), search for "index", then use
-        //          the "main" package prop.
-        //
-        const extensions = containingFileIsDts
-          ? ExtensionsDtsOnly
-          : ExtensionsSourceOnly;
-        if (workspaceRef.path) {
-          moduleFile = this.findModuleFile(
-            workspaceRef.workspace.path,
-            workspaceRef.path,
+        } else if (isFileModuleRef(moduleRef)) {
+          module = this.resolveFileModule(
+            moduleRef,
+            path.dirname(containingFile),
             extensions
           );
         }
-        if (!moduleFile) {
-          const { types, typings, main } = workspaceRef.workspace.packageJson;
-          if (isString(types)) {
-            if (this.options.traceResolution) {
-              console.log(`Package has 'types' field '${types}'.`);
-            }
-            moduleFile = this.findModuleFile(
-              workspaceRef.workspace.path,
-              types,
-              extensions
-            );
-          } else if (isString(typings)) {
-            if (this.options.traceResolution) {
-              console.log(`Package has 'typings' field '${typings}'.`);
-            }
-            moduleFile = this.findModuleFile(
-              workspaceRef.workspace.path,
-              typings,
-              extensions
-            );
-          } else if (isString(main)) {
-            if (this.options.traceResolution) {
-              console.log(`Package has 'main' field '${main}'.`);
-            }
-            moduleFile = this.findModuleFile(
-              workspaceRef.workspace.path,
-              main,
-              extensions
-            );
-          }
-        }
-        if (!moduleFile) {
-          if (this.options.traceResolution) {
-            console.log(`Searching for index file.`);
-          }
-          moduleFile = this.findModuleFile(
-            workspaceRef.workspace.path,
-            "index",
-            extensions
+      }
+
+      resolutions.push(module);
+      if (this.resolverLog) {
+        if (module) {
+          this.resolverLog.log(
+            `File ${module.resolvedFileName} exists - using it as a module resolution result.`
           );
-        }
-
-        if (moduleFile) {
-          resolutions.push({
-            resolvedFileName: moduleFile.path,
-            extension: moduleFile.extension,
-          });
-          if (this.options.traceResolution) {
-            console.log(
-              `File ${moduleFile.path} exists - using it as a module resolution result.`
-            );
-            console.log(
-              `======= Module name '${moduleName}' was successfully resolved to '${moduleFile.path}' =======`
-            );
-          }
-        } else {
-          resolutions.push(undefined);
-          if (this.options.traceResolution) {
-            console.log(`Failed to resolve module ${moduleName} to a file.`);
-            console.log(
-              `======= Module name '${moduleName}' failed to resolve to a file' =======`
-            );
-          }
-        }
-        continue;
-      }
-
-      //
-      //  This module is part of an external package.
-      //
-      const moduleRef = parseModuleRef(moduleName);
-      if (isPackageModuleRef(moduleRef)) {
-        let moduleFile: ModuleFile | undefined;
-
-        //
-        //  The module refers to a specific package. Search for the
-        //  package under node_modules, starting from the containing
-        //  file's directory, and moving up through each parent.
-        //
-        const pkgDir = findPackageDependencyDir(moduleRef, {
-          startDir: path.dirname(containingFile),
-          // TODO: stopDir ==> workspace root? security & perf
-        });
-        if (pkgDir) {
-          //
-          //  The package was found.
-          //
-          //  Search for the module, preferring typescript source (ts[x]) and
-          //  type files (.d.ts) over javascript source (js[x], json).
-          //
-          //    NOTE: For modules which don't include a path (e.g. just
-          //          the package name), search for "index", then use
-          //          the "types", "typings", or "main" package props.
-          //
-          if (this.options.traceResolution) {
-            console.log(
-              `Loading module '${moduleName}' from '${pkgDir}' folder.`
-            );
-          }
-
-          const extensions = containingFileIsDts
-            ? ExtensionsDtsOnly
-            : ExtensionsAll;
-          if (moduleRef.path) {
-            moduleFile = this.findModuleFile(
-              pkgDir,
-              moduleRef.path,
-              extensions
-            );
-          }
-          if (!moduleFile) {
-            const { types, typings, main } = readPackage(pkgDir);
-            if (isString(types)) {
-              if (this.options.traceResolution) {
-                console.log(`Package has 'types' field '${types}'.`);
-              }
-              moduleFile = this.findModuleFile(pkgDir, types, extensions);
-            } else if (isString(typings)) {
-              if (this.options.traceResolution) {
-                console.log(`Package has 'typings' field '${typings}'.`);
-              }
-              moduleFile = this.findModuleFile(pkgDir, typings, extensions);
-            } else if (isString(main)) {
-              if (this.options.traceResolution) {
-                console.log(`Package has 'main' field '${main}'.`);
-              }
-              moduleFile = this.findModuleFile(pkgDir, main, extensions);
-            }
-          }
-          if (!moduleFile) {
-            if (this.options.traceResolution) {
-              console.log(`Searching for index file.`);
-            }
-            moduleFile = this.findModuleFile(pkgDir, "index", extensions);
-          }
-        }
-        if (!moduleFile) {
-          //
-          //  The module still hasn't been resolved.
-          //
-          //  Search for a corresponding @types package under node_modules.
-          //  Start from the containing file's directory, and move up through
-          //  each parent.
-          //
-          const typesModuleRef: PackageModuleRef = {
-            scope: "@types",
-            name: getMangledPackageName(moduleRef),
-            path: moduleRef.path,
-          };
-          const typesPkgDir = findPackageDependencyDir(typesModuleRef, {
-            startDir: path.dirname(containingFile),
-            // TODO: stopDir ==> workspace root? security & perf
-          });
-          if (typesPkgDir) {
-            //
-            //  The @types package was found.
-            //
-            //  Search for the module's type file (.d.ts).
-            //
-            //    NOTE: For modules which don't include a path (e.g. just
-            //          the package name), search for "index", then use
-            //          the "types", "typings", or "main" package props.
-            //
-            if (this.options.traceResolution) {
-              console.log(
-                `Loading module '${moduleName}' from '${typesPkgDir}' folder.`
-              );
-            }
-
-            if (typesModuleRef.path) {
-              moduleFile = this.findModuleFile(
-                typesPkgDir,
-                typesModuleRef.path,
-                ExtensionsDtsOnly
-              );
-            }
-            if (!moduleFile) {
-              const { types, typings, main } = readPackage(typesPkgDir);
-              if (isString(types)) {
-                if (this.options.traceResolution) {
-                  console.log(`Package has 'types' field '${types}'.`);
-                }
-                moduleFile = this.findModuleFile(
-                  typesPkgDir,
-                  types,
-                  ExtensionsDtsOnly
-                );
-              } else if (isString(typings)) {
-                if (this.options.traceResolution) {
-                  console.log(`Package has 'typings' field '${typings}'.`);
-                }
-                moduleFile = this.findModuleFile(
-                  typesPkgDir,
-                  typings,
-                  ExtensionsDtsOnly
-                );
-              } else if (isString(main)) {
-                if (this.options.traceResolution) {
-                  console.log(`Package has 'main' field '${main}'.`);
-                }
-                moduleFile = this.findModuleFile(
-                  typesPkgDir,
-                  main,
-                  ExtensionsDtsOnly
-                );
-              }
-            }
-            if (!moduleFile) {
-              if (this.options.traceResolution) {
-                console.log(`Searching for index file.`);
-              }
-              moduleFile = this.findModuleFile(
-                typesPkgDir,
-                "index",
-                ExtensionsDtsOnly
-              );
-            }
-          }
-        }
-
-        if (moduleFile) {
-          resolutions.push({
-            resolvedFileName: moduleFile.path,
-            extension: moduleFile.extension,
-          });
-          if (this.options.traceResolution) {
-            console.log(
-              `File ${moduleFile.path} exists - using it as a module resolution result.`
-            );
-            console.log(
-              `======= Module name '${moduleName}' was successfully resolved to '${moduleFile.path}' =======`
-            );
-          }
-        } else {
-          resolutions.push(undefined);
-          if (this.options.traceResolution) {
-            console.log(`Failed to resolve module ${moduleName} to a file.`);
-            console.log(
-              `======= Module name '${moduleName}' failed to resolve to a file' =======`
-            );
-          }
-        }
-
-        continue;
-      }
-
-      if (isFileModuleRef(moduleRef)) {
-        //
-        //  This module refers to a file in the containing package.
-        //
-        //  Search for it, preferring typescript source (ts[x]) and type files
-        //  (.d.ts) over javascript source (js[x], json).
-        //
-        //  If a matching module file was found in the contet of the
-        //  containing file, return it. Otherwise, stop searching and
-        //  return `undefined`.
-        //
-        const extensions = containingFileIsDts
-          ? ExtensionsDtsOnly
-          : ExtensionsAll;
-        const searchDir = path.dirname(containingFile);
-        if (this.options.traceResolution) {
-          console.log(
-            `Loading module '${moduleName}' from '${searchDir}' folder.`
+          this.resolverLog.log(
+            `======= Module name '${moduleName}' was successfully resolved to '${module.resolvedFileName}' =======`
           );
-        }
-        const moduleFile = this.findModuleFile(
-          searchDir,
-          moduleRef.path,
-          extensions
-        );
-
-        if (moduleFile) {
-          resolutions.push({
-            resolvedFileName: moduleFile.path,
-            extension: moduleFile.extension,
-          });
-          if (this.options.traceResolution) {
-            console.log(
-              `File ${moduleFile.path} exists - using it as a module resolution result.`
-            );
-            console.log(
-              `======= Module name '${moduleName}' was successfully resolved to '${moduleFile.path}' =======`
-            );
+          if (this.showResolverLogOnSuccess) {
+            console.log(this.resolverLog.serialize());
           }
         } else {
-          resolutions.push(undefined);
-          if (this.options.traceResolution) {
-            console.log(`Failed to resolve module ${moduleName} to a file.`);
-            console.log(
-              `======= Module name '${moduleName}' failed to resolve to a file' =======`
-            );
+          this.resolverLog.log(
+            `Failed to resolve module ${moduleName} to a file.`
+          );
+          this.resolverLog.log(
+            `======= Module name '${moduleName}' failed to resolve to a file' =======`
+          );
+          if (
+            this.showResolverLogOnFailure &&
+            this.shouldShowResolverFailure(moduleName)
+          ) {
+            console.log(this.resolverLog.serialize());
           }
         }
-        continue;
-      }
-
-      //
-      //  If the search is finished, and the module was not resolved,
-      //  there are a few possible reasons why:
-      //
-      //    - the module's package is missing
-      //    - the module file doesn't exist
-      //      - module refers to a flow type file
-      //      - module only exists for a different platform
-      //      - module is just missing from the package
-      //    - the module is an "internal" node module
-      //
-      //  Whatever the reason, we will return `undefined` to indicate
-      //  that module resolution failed. TypeScript will proceed with
-      //  the information it has, and may very well succeed without
-      //  the module file.
-      //
-      resolutions.push(undefined);
-      if (this.options.traceResolution) {
-        console.log(`Failed to resolve module ${moduleName} to a file.`);
-        console.log(
-          `======= Module name '${moduleName}' failed to resolve to a file' =======`
-        );
       }
     }
 
@@ -754,11 +673,15 @@ class ReactNativeResolverHost {
 export function createResolverHost(
   config: ProjectConfig,
   platform: string,
-  disableReactNativePackageSubstitution: boolean
+  platformExtensions: string[],
+  disableReactNativePackageSubstitution: boolean,
+  verbose: boolean
 ): ResolverHost {
   const host = new ReactNativeResolverHost(
     platform,
+    platformExtensions,
     disableReactNativePackageSubstitution,
+    verbose,
     config.options
   );
   return host;

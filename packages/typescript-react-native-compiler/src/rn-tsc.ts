@@ -17,6 +17,10 @@ import path from "path";
 // TODO: remove this -- careful, it is needed for running 'tsc', not just access ts APIs
 import ts from "typescript";
 
+function indent(spaces: number, s: string): string {
+  return " ".repeat(spaces) + s;
+}
+
 function usage() {
   const scriptName = path.basename(process.argv[1]);
   console.log(
@@ -25,15 +29,105 @@ function usage() {
       os.EOL
   );
   console.log(chalk.whiteBright("OPTIONS") + os.EOL);
+  console.log(chalk.white(indent(2, "--platform <p>")));
   console.log(
     chalk.white(
-      "  --platform <android|ios|windows|macos|win32>                     [required]"
+      indent(
+        6,
+        "Required. Target react-native platform. This must refer to a platform"
+      )
     )
   );
   console.log(
     chalk.white(
-      "  --disableReactNativePackageSubstitution                          [optional]"
+      indent(
+        6,
+        "which has a react-native implementation, such as ios, android, windows"
+      )
     )
+  );
+  console.log(chalk.white(indent(6, "and macos.")));
+  console.log("");
+  console.log(
+    chalk.white(indent(2, "--platformExtensions <ext-1>[,<ext-2>[...<ext-N>]]"))
+  );
+  console.log(
+    chalk.white(
+      indent(
+        6,
+        "Optional. List of platform file extensions to use when resolving"
+      )
+    )
+  );
+  console.log(
+    chalk.white(
+      indent(
+        6,
+        "modules. Resolution always starts with the platform name, followed"
+      )
+    )
+  );
+  console.log(
+    chalk.white(
+      indent(6, "by these extensions, ordered from highest precedence (ext-1)")
+    )
+  );
+  console.log(chalk.white(indent(6, "to lowest (ext-N).")));
+  console.log("");
+  console.log(chalk.white(indent(6, "Example:")));
+  console.log(
+    chalk.white(
+      indent(
+        8,
+        `${scriptName} --platform ios --platformExtensions mobile,native`
+      )
+    )
+  );
+  console.log("");
+  console.log(
+    chalk.white(
+      indent(
+        8,
+        "Resolution of module 'm' searchs for m.ios.*, then m.mobile.*, then"
+      )
+    )
+  );
+  console.log(
+    chalk.white(indent(8, "m.native.*, and finally m.* (no extension)."))
+  );
+  console.log("");
+  console.log(
+    chalk.white(indent(2, "--disableReactNativePackageSubstitution"))
+  );
+  console.log(
+    chalk.white(
+      indent(
+        6,
+        "Optional. The resolver normally maps 'react-native' module references"
+      )
+    )
+  );
+  console.log(
+    chalk.white(
+      indent(
+        6,
+        "to the platform-specific implementation of react-native, such as"
+      )
+    )
+  );
+  console.log(
+    chalk.white(
+      indent(
+        6,
+        "react-native-windows for windows, and react-native for ios/android."
+      )
+    )
+  );
+  console.log(chalk.white(indent(6, "This option disables that behavior.")));
+  console.log("");
+  console.log(chalk.white(indent(2, "--verbose")));
+  console.log(
+    chalk.white(indent(6, "Optional. Turn on verbose logging to the console."))
   );
   console.log("");
 
@@ -145,6 +239,21 @@ function cli(): ExitCode {
   const platform = process.argv[idxPlatform + 1];
   process.argv.splice(idxPlatform, 2);
 
+  // Platform file extensions (optional)
+  const idxPlatformExts = process.argv.indexOf("--platformExtensions");
+  let platformExtensions: string[] = [];
+  if (idxPlatformExts !== -1) {
+    if (idxPlatformExts === process.argv.length - 1) {
+      usage();
+      return error(
+        "platformExtenions specificed without a list of file extensions",
+        ExitCode.UsageError
+      );
+    }
+    platformExtensions = process.argv[idxPlatformExts + 1].split(",");
+    process.argv.splice(idxPlatformExts, 2);
+  }
+
   // Disable react-native package substitution (optional)
   const idxDisableRNSub = process.argv.indexOf(
     "--disableReactNativePackageSubstitution"
@@ -155,12 +264,20 @@ function cli(): ExitCode {
     process.argv.splice(idxDisableRNSub, 1);
   }
 
-  if (process.argv.length > 0) {
+  // Verbose mode (optional)
+  const idxVerbose = process.argv.indexOf("--verbose");
+  let verbose = false;
+  if (idxVerbose !== -1) {
+    verbose = true;
+    process.argv.splice(idxVerbose, 1);
+  }
+
+  if (process.argv.length > 2) {
     // TSC command line
 
-    if (process.argv[0].toLowerCase() === "--build") {
+    if (process.argv[2].toLowerCase() === "--build") {
       return errorUnsupportTscCliArgument("--build");
-    } else if (process.argv[0].toLowerCase() === "-b") {
+    } else if (process.argv[2].toLowerCase() === "-b") {
       return errorUnsupportTscCliArgument("-b");
     }
   }
@@ -305,7 +422,13 @@ function cli(): ExitCode {
       return errorUnsupportTscOption("composite");
     }
 
-    return emit(parsedConfig, platform, disableReactNativePackageSubstitution);
+    return emit(
+      parsedConfig,
+      platform,
+      platformExtensions,
+      disableReactNativePackageSubstitution,
+      verbose
+    );
   }
   // no config file -- just file names on the command-line
 
@@ -339,14 +462,18 @@ function cli(): ExitCode {
   return emit(
     parsedCommandLine,
     platform,
-    disableReactNativePackageSubstitution
+    platformExtensions,
+    disableReactNativePackageSubstitution,
+    verbose
   );
 }
 
 function emit(
   parsedCommandLine: ts.ParsedCommandLine,
   platform: string,
-  disableReactNativePackageSubstitution: boolean
+  platformExtensions: string[],
+  disableReactNativePackageSubstitution: boolean,
+  verbose: boolean
 ): ExitCode {
   const compilerHost = ts.createCompilerHost(parsedCommandLine.options);
 
@@ -357,7 +484,9 @@ function emit(
   const resolverHost = createResolverHost(
     parsedCommandLine,
     platform,
-    disableReactNativePackageSubstitution
+    platformExtensions,
+    disableReactNativePackageSubstitution,
+    verbose
   );
   compilerHost.resolveModuleNames =
     resolverHost.resolveModuleNames.bind(resolverHost);
