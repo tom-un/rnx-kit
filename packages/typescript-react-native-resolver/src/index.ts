@@ -145,7 +145,9 @@ class ReactNativeResolverHost {
     this.platformExtensions = [this.platform, ...platformExtensions].map(
       (e) => `.${e}` // prepend a '.' to each extension
     );
-    this.reactNativePackageName = getReactNativePackageName(this.platform);
+    this.reactNativePackageName = disableReactNativePackageSubstitution
+      ? undefined
+      : getReactNativePackageName(this.platform);
     this.workspaces = getWorkspaces(process.cwd());
     this.defaultResolverHost = createDefaultResolverHost(options);
     this.extensionsDtsOnly = [Extension.Dts];
