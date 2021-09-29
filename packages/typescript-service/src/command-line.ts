@@ -12,7 +12,7 @@ export function parseCommandLine(
   if (commandLine) {
     if (isNonEmptyArray(commandLine.errors)) {
       const writer = diagnosticWriter ?? createDiagnosticWriter();
-      writer.print(commandLine.errors);
+      commandLine.errors.forEach((e) => writer.print(e));
       return undefined;
     }
   }

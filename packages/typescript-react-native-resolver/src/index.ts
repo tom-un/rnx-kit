@@ -125,6 +125,7 @@ class ReactNativeResolverHost {
   private workspaces: WorkspaceInfo;
   private defaultResolverHost: ResolverHost;
   private extensionsDtsOnly: Extension[];
+  private extensionsSourceOnly: Extension[];
   private extensionsAll: Extension[];
   private resolverLog: ResolverLog | undefined;
   private showResolverLogOnSuccess: boolean;
@@ -148,11 +149,14 @@ class ReactNativeResolverHost {
     this.workspaces = getWorkspaces(process.cwd());
     this.defaultResolverHost = createDefaultResolverHost(options);
     this.extensionsDtsOnly = [Extension.Dts];
+    this.extensionsSourceOnly = [Extension.Ts, Extension.Tsx];
     this.extensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
     if (this.options.checkJs) {
+      this.extensionsSourceOnly.push(Extension.Js, Extension.Jsx);
       this.extensionsAll.push(Extension.Js, Extension.Jsx);
     }
     if (this.options.resolveJsonModule) {
+      this.extensionsSourceOnly.push(Extension.Json);
       this.extensionsAll.push(Extension.Json);
     }
     this.showResolverLogOnSuccess = !!this.options.traceResolution;
@@ -248,9 +252,13 @@ class ReactNativeResolverHost {
       //  under one of our workspace (in-repo) packages.
       //
       const p = path.resolve(path.dirname(containingFile), ref.path);
-      workspace = this.workspaces.find((w) =>
-        p.startsWith(path.normalize(w.path))
-      );
+      workspace = this.workspaces.find((w) => {
+        const normalized = path.normalize(w.path);
+        const trailingSeparator = normalized.endsWith(path.sep)
+          ? normalized
+          : normalized + path.sep;
+        return p.startsWith(trailingSeparator);
+      });
       if (workspace) {
         const wp = path.normalize(workspace.path);
         workspaceModulePath = p.substr(
@@ -400,11 +408,14 @@ class ReactNativeResolverHost {
         module = this.findModuleFile(packageDir, typings, extensions);
       }
     }
-    if (!module && isString(main)) {
-      if (this.resolverLog) {
-        this.resolverLog.log(`Package has 'main' field '${main}'.`);
+    //  Only consult the 'main' property when looking for source files.
+    if (extensions.some((e) => this.extensionsSourceOnly.indexOf(e) !== -1)) {
+      if (!module && isString(main)) {
+        if (this.resolverLog) {
+          this.resolverLog.log(`Package has 'main' field '${main}'.`);
+        }
+        module = this.findModuleFile(packageDir, main, extensions);
       }
-      module = this.findModuleFile(packageDir, main, extensions);
     }
 
     //  Properties from package.json weren't able to resolve the module.
@@ -479,6 +490,12 @@ class ReactNativeResolverHost {
       }
 
       module = this.resolveModule(pkgDir, moduleRef.path, extensions);
+      if (!module && moduleRef.path) {
+        // Try again, without using a path, but only look for type (.d.ts)
+        // files. Hand-crafted type modules in the package don't have to
+        // use the same file layout as the associated JS/TS module.
+        module = this.resolveModule(pkgDir, undefined, this.extensionsDtsOnly);
+      }
     }
 
     if (!module) {
@@ -504,6 +521,15 @@ class ReactNativeResolverHost {
           typesModuleRef.path,
           this.extensionsDtsOnly
         );
+        if (!module && typesModuleRef.path) {
+          // Try again, without using a path. @types modules don't have to use
+          // the same file layout as the associated JS/TS module.
+          module = this.resolveModule(
+            typesPkgDir,
+            undefined,
+            this.extensionsDtsOnly
+          );
+        }
       }
     }
 
@@ -541,7 +567,8 @@ class ReactNativeResolverHost {
     // ignore resolver errors for built-in node modules
     if (
       builtinModules.indexOf(moduleName) !== -1 ||
-      moduleName === "fs/promises" // doesn't show up in the list, but it's a built-in
+      moduleName === "fs/promises" || // doesn't show up in the list, but it's a built-in
+      moduleName.toLowerCase().startsWith("node:") // explicit use of a built-in
     ) {
       return false;
     }

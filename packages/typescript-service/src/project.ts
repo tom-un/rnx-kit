@@ -136,7 +136,7 @@ export class Project {
   validateFile(fileName: string): boolean {
     const diagnostics = this.getFileDiagnostics(fileName);
     if (isNonEmptyArray(diagnostics)) {
-      this.diagnosticWriter.print(diagnostics);
+      diagnostics.forEach((d) => this.diagnosticWriter.print(d));
       return false;
     }
     return true;

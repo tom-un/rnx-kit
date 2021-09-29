@@ -43,7 +43,7 @@ export class ProjectConfigLoader {
     }
 
     if (isNonEmptyArray(commandLine.errors)) {
-      this.diagnosticWriter.print(commandLine.errors);
+      commandLine.errors.forEach((e) => this.diagnosticWriter.print(e));
       throw new Error(`Failed to load '${configFileName}'`);
     }
 

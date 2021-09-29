@@ -302,7 +302,7 @@ function cli(): ExitCode {
     return errorUnsupportTscOption("locale");
   }
   if (parsedCommandLine.errors.length > 0) {
-    diagnosticWriter.print(parsedCommandLine.errors);
+    parsedCommandLine.errors.forEach((e) => diagnosticWriter.print(e));
     return ExitCode.UsageError;
   }
 
@@ -468,13 +468,13 @@ function cli(): ExitCode {
   );
 }
 
-function emit(
+function createProgram(
   parsedCommandLine: ts.ParsedCommandLine,
   platform: string,
   platformExtensions: string[],
   disableReactNativePackageSubstitution: boolean,
   verbose: boolean
-): ExitCode {
+) {
   const compilerHost = ts.createCompilerHost(parsedCommandLine.options);
 
   // TODO: needed?
@@ -502,8 +502,26 @@ function emit(
       ts.getConfigFileParsingDiagnostics(parsedCommandLine),
   };
   const program = ts.createProgram(programOptions);
+  return program;
+}
+
+function emit(
+  parsedCommandLine: ts.ParsedCommandLine,
+  platform: string,
+  platformExtensions: string[],
+  disableReactNativePackageSubstitution: boolean,
+  verbose: boolean
+): ExitCode {
+  const program = createProgram(
+    parsedCommandLine,
+    platform,
+    platformExtensions,
+    disableReactNativePackageSubstitution,
+    verbose
+  );
 
   const isListFilesOnly = program.getCompilerOptions().listFilesOnly;
+
   const allDiagnostics = program.getConfigFileParsingDiagnostics().slice();
   const configFileParsingDiagnosticsLength = allDiagnostics.length;
   addRange(
@@ -528,17 +546,22 @@ function emit(
   const diagnostics = Array.from(
     ts.sortAndDeduplicateDiagnostics(allDiagnostics)
   );
-  const diagnosticWriter = createDiagnosticWriter();
-  diagnosticWriter.print(diagnostics);
+  if (diagnostics.length > 0) {
+    const writer = createDiagnosticWriter();
+    let errors = 0;
 
-  let count = 0;
-  diagnostics.forEach(
-    (d) => d.category === ts.DiagnosticCategory.Error && count++
-  );
-  if (count > 0) {
-    console.log("");
-    console.log(count === 1 ? "Found 1 error." : `Found ${count} errors.`);
-    console.log("");
+    diagnostics.forEach((d) => {
+      writer.print(d);
+      if (d.category === ts.DiagnosticCategory.Error) {
+        errors++;
+      }
+    });
+
+    if (errors > 0) {
+      console.log("");
+      console.log(errors === 1 ? "Found 1 error." : `Found ${errors} errors.`);
+      console.log("");
+    }
   }
 
   if (emitResult.emitSkipped) {
