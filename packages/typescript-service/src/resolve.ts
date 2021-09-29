@@ -66,6 +66,11 @@ export function createDefaultResolverHost(
   const moduleResolutionHost: ts.ModuleResolutionHost = {
     fileExists: ts.sys.fileExists,
     readFile: ts.sys.readFile,
+    trace: ts.sys.write,
+    directoryExists: ts.sys.directoryExists,
+    realpath: ts.sys.realpath,
+    getCurrentDirectory: ts.sys.getCurrentDirectory,
+    getDirectories: ts.sys.getDirectories,
   };
 
   return {
