@@ -7,8 +7,8 @@
   "files": [
     "lib/*"
   ],
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "bin": {
     "rnx-dep-check": "lib/cli.js"
   },
