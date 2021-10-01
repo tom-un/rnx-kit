@@ -169,8 +169,7 @@ class ReactNativeResolverHost {
 
   private workspaces: WorkspaceInfo;
 
-  private extensionsDtsOnly: Extension[];
-  private extensionsSourceOnly: Extension[];
+  private extensionsTypeScript: Extension[];
   private extensionsAll: Extension[];
 
   constructor(
@@ -208,15 +207,12 @@ class ReactNativeResolverHost {
 
     this.workspaces = getWorkspaces(process.cwd());
 
-    this.extensionsDtsOnly = [Extension.Dts];
-    this.extensionsSourceOnly = [Extension.Ts, Extension.Tsx];
+    this.extensionsTypeScript = [Extension.Ts, Extension.Tsx, Extension.Dts];
     this.extensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
     if (this.options.checkJs) {
-      this.extensionsSourceOnly.push(Extension.Js, Extension.Jsx);
       this.extensionsAll.push(Extension.Js, Extension.Jsx);
     }
     if (this.options.resolveJsonModule) {
-      this.extensionsSourceOnly.push(Extension.Json);
       this.extensionsAll.push(Extension.Json);
     }
   }
@@ -398,6 +394,28 @@ class ReactNativeResolverHost {
       }
     }
 
+    if (extension === Extension.Js || extension === Extension.Jsx) {
+      //
+      //  The module was not found, but it has a JavaScript extension.
+      //  Repeat the broad search, without the extension.
+      //
+      const modulePathNoExt = modulePath.substring(
+        0,
+        modulePath.length - extension.length
+      );
+      for (const pext of [...this.platformExtensions, ""]) {
+        for (const ext of extensions) {
+          const p = path.join(searchDir, `${modulePathNoExt}${pext}${ext}`);
+          if (this.isFile(p)) {
+            return {
+              resolvedFileName: p,
+              extension: ext,
+            };
+          }
+        }
+      }
+    }
+
     //
     //  The module was not found, but it may refer to a directory name.
     //  If so, search within that directory for a module named "index".
@@ -456,12 +474,9 @@ class ReactNativeResolverHost {
         module = this.findModuleFile(packageDir, typings, extensions);
       }
     }
-    //  Only consult the 'main' property when looking for source files.
-    if (extensions.some((e) => this.extensionsSourceOnly.indexOf(e) !== -1)) {
-      if (!module && isString(main)) {
-        this.resolverLog.log("Package has 'main' field '%s'.", main);
-        module = this.findModuleFile(packageDir, main, extensions);
-      }
+    if (!module && isString(main)) {
+      this.resolverLog.log("Package has 'main' field '%s'.", main);
+      module = this.findModuleFile(packageDir, main, extensions);
     }
 
     //  Properties from package.json weren't able to resolve the module.
@@ -536,7 +551,7 @@ class ReactNativeResolverHost {
         // Try again, without using a path, but only look for type (.d.ts)
         // files. Hand-crafted type modules in the package don't have to
         // use the same file layout as the associated JS/TS module.
-        module = this.resolveModule(pkgDir, undefined, this.extensionsDtsOnly);
+        module = this.resolveModule(pkgDir, undefined, [Extension.Dts]);
       }
     }
 
@@ -560,16 +575,12 @@ class ReactNativeResolverHost {
         module = this.resolveModule(
           typesPkgDir,
           typesModuleRef.path,
-          this.extensionsDtsOnly
+          this.extensionsTypeScript
         );
         if (!module && typesModuleRef.path) {
           // Try again, without using a path. @types modules don't have to use
           // the same file layout as the associated JS/TS module.
-          module = this.resolveModule(
-            typesPkgDir,
-            undefined,
-            this.extensionsDtsOnly
-          );
+          module = this.resolveModule(typesPkgDir, undefined, [Extension.Dts]);
         }
       }
     }
@@ -618,6 +629,12 @@ class ReactNativeResolverHost {
       return false;
     }
 
+    // ignore resolver errors for code files
+    const codeExts = /\.(css)$/i;
+    if (path.extname(moduleName).match(codeExts)) {
+      return false;
+    }
+
     return true;
   }
 
@@ -636,7 +653,7 @@ class ReactNativeResolverHost {
     //  other type files. Restrict module resolution accordingly.
     //
     const extensions = hasExtension(containingFile, Extension.Dts)
-      ? this.extensionsDtsOnly
+      ? this.extensionsTypeScript
       : this.extensionsAll;
 
     const resolutions: (ResolvedModuleFull | undefined)[] = [];
