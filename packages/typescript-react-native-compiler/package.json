@@ -25,18 +25,20 @@
   },
   "dependencies": {
     "@rnx-kit/tools-node": "^1.1.3",
-    "@rnx-kit/typescript-react-native-resolver": "^0.0.1-1jstest.1",
-    "@rnx-kit/typescript-service": "^1.3.6-1jstest.1",
-    "chalk": "^4.1.0",
-    "lodash": "^4.17.21",
-    "typescript": "^4.0.0"
+    "@rnx-kit/typescript-react-native-resolver": "^0.0.1-1jstest.11",
+    "@rnx-kit/typescript-service": "^1.3.6-1jstest.11",
+    "chalk": "^4.1.0"
   },
   "devDependencies": {
     "@rnx-kit/jest-preset": "*",
     "@rnx-kit/tools-react-native": "*",
     "@types/node": "^14.15.0",
     "jest-extended": "^0.11.5",
-    "rnx-kit-scripts": "*"
+    "rnx-kit-scripts": "*",
+    "typescript": "^4.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^4.0.0"
   },
   "depcheck": {
     "ignoreMatches": [

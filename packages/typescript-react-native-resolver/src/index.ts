@@ -23,6 +23,7 @@ import isString from "lodash/isString";
 import { builtinModules } from "module";
 import os from "os";
 import path from "path";
+import util from "util";
 import { getWorkspaces, WorkspaceInfo } from "workspace-tools";
 
 // TODO: use @rnx-kit/console
@@ -48,7 +49,7 @@ function isFile(p: string): boolean {
  * Get the name of an out-of-tree platform's react-native package.
  *
  * @param platform Platform
- * @returns Name of the out-of-tree platform's react-native package, or `undefined` if it is in-tree.
+ * @returns Name of the out-of-tree platform's react-native package, or `undefined` if it is in-tree or unknown.
  */
 export function getReactNativePackageName(
   platform: string
@@ -60,12 +61,8 @@ export function getReactNativePackageName(
       return "react-native-macos";
     case "win32":
       return "@office-iss/react-native-win32";
-    case "ios":
-    case "android":
-      return undefined;
-    default:
-      throw new Error(`Unknown react-native platform ${platform}`);
   }
+  return undefined;
 }
 
 const Extensions = [
@@ -93,23 +90,66 @@ type WorkspaceModuleRef = {
   path?: string;
 };
 
+const enum ResolverLogMode {
+  Never,
+  Always,
+  OnFailure,
+}
+
 class ResolverLog {
+  private mode: ResolverLogMode;
   private messages: string[];
+  private logFile: string | undefined;
 
-  constructor() {
+  constructor(mode: ResolverLogMode, logFile?: string) {
+    this.mode = mode;
     this.messages = [];
+    this.logFile = logFile;
   }
 
-  log(message: string): void {
-    this.messages.push(message);
+  isEnabled(): boolean {
+    return this.mode !== ResolverLogMode.Never;
   }
 
-  serialize(): string {
-    return this.messages.join(os.EOL);
+  log(format: string, ...args: string[]): void {
+    if (this.isEnabled()) {
+      this.messages.push(util.format(format, ...args));
+    }
+  }
+
+  private flush(): void {
+    const messages = this.messages.join(os.EOL);
+    if (this.logFile) {
+      fs.writeFileSync(this.logFile, messages + os.EOL, {
+        encoding: "utf-8",
+        flag: "a",
+      });
+    } else {
+      console.log(messages);
+    }
   }
 
   clear(): void {
-    this.messages = [];
+    if (this.isEnabled()) {
+      this.messages = [];
+    }
+  }
+
+  success(): void {
+    if (this.mode === ResolverLogMode.Always) {
+      this.flush();
+    }
+    this.clear();
+  }
+
+  failure(): void {
+    if (
+      this.mode === ResolverLogMode.OnFailure ||
+      this.mode === ResolverLogMode.Always
+    ) {
+      this.flush();
+    }
+    this.clear();
   }
 }
 
@@ -117,39 +157,57 @@ class ResolverLog {
  * Implementation of ResolverHost for use with react-native applications.
  */
 class ReactNativeResolverHost {
-  private platform: string;
-  private disableReactNativePackageSubstitution: boolean;
   private options: ProjectConfig["options"];
+  private platform: string;
   private platformExtensions: string[];
-  private reactNativePackageName: string | undefined;
-  private workspaces: WorkspaceInfo;
+  private disableReactNativePackageSubstitution: boolean;
+
+  private resolverLog: ResolverLog;
   private defaultResolverHost: ResolverHost;
+
+  private reactNativePackageName: string | undefined;
+
+  private workspaces: WorkspaceInfo;
+
   private extensionsDtsOnly: Extension[];
   private extensionsSourceOnly: Extension[];
   private extensionsAll: Extension[];
-  private resolverLog: ResolverLog | undefined;
-  private showResolverLogOnSuccess: boolean;
-  private showResolverLogOnFailure: boolean;
 
   constructor(
+    options: ProjectConfig["options"],
     platform: string,
-    platformExtensions: string[],
+    platformExtensions: string[] | undefined,
     disableReactNativePackageSubstitution: boolean,
-    verbose: boolean,
-    options: ProjectConfig["options"]
+    traceReactNativeModuleResolutionErrors: boolean,
+    traceResolutionLog: string | undefined
   ) {
-    this.platform = platform.toLowerCase();
+    this.platform = platform;
+    this.platformExtensions = [
+      this.platform,
+      ...(platformExtensions || []),
+    ].map(
+      (e) => `.${e}` // prepend a '.' to each extension
+    );
     this.disableReactNativePackageSubstitution =
       disableReactNativePackageSubstitution;
     this.options = options;
-    this.platformExtensions = [this.platform, ...platformExtensions].map(
-      (e) => `.${e}` // prepend a '.' to each extension
+
+    let mode = ResolverLogMode.Never;
+    if (this.options.traceResolution) {
+      mode = ResolverLogMode.Always;
+    } else if (traceReactNativeModuleResolutionErrors) {
+      mode = ResolverLogMode.OnFailure;
+    }
+    this.resolverLog = new ResolverLog(mode, traceResolutionLog);
+    this.defaultResolverHost = createDefaultResolverHost(
+      options,
+      this.resolverLog.log.bind(this.resolverLog)
     );
-    this.reactNativePackageName = disableReactNativePackageSubstitution
-      ? undefined
-      : getReactNativePackageName(this.platform);
+
+    this.reactNativePackageName = getReactNativePackageName(this.platform);
+
     this.workspaces = getWorkspaces(process.cwd());
-    this.defaultResolverHost = createDefaultResolverHost(options);
+
     this.extensionsDtsOnly = [Extension.Dts];
     this.extensionsSourceOnly = [Extension.Ts, Extension.Tsx];
     this.extensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
@@ -161,26 +219,20 @@ class ReactNativeResolverHost {
       this.extensionsSourceOnly.push(Extension.Json);
       this.extensionsAll.push(Extension.Json);
     }
-    this.showResolverLogOnSuccess = !!this.options.traceResolution;
-    this.showResolverLogOnFailure = !!this.options.traceResolution || verbose;
-    this.resolverLog =
-      this.showResolverLogOnSuccess || this.showResolverLogOnFailure
-        ? new ResolverLog()
-        : undefined;
   }
 
   private isFile(p: string): boolean {
     const result = isFile(p);
-    if (!result && this.resolverLog) {
-      this.resolverLog.log(`File ${p} does not exist.`);
+    if (!result) {
+      this.resolverLog.log("File %s does not exist.", p);
     }
     return result;
   }
 
   private isDirectory(p: string): boolean {
     const result = isDirectory(p);
-    if (!result && this.resolverLog) {
-      this.resolverLog.log(`Directory ${p} does not exist.`);
+    if (!result) {
+      this.resolverLog.log("Directory %s does not exist.", p);
     }
     return result;
   }
@@ -216,9 +268,7 @@ class ReactNativeResolverHost {
     }
 
     const replaced = this.reactNativePackageName + m.substring(rn.length);
-    if (this.resolverLog) {
-      this.resolverLog.log(`Substituting module '${m}' with '${replaced}'.`);
-    }
+    this.resolverLog.log("Substituting module '%s' with '%s'.", m, replaced);
     return replaced;
   }
 
@@ -399,23 +449,17 @@ class ReactNativeResolverHost {
     //  type files (.d.ts).
     if (extensions.indexOf(Extension.Dts) !== -1) {
       if (isString(types)) {
-        if (this.resolverLog) {
-          this.resolverLog.log(`Package has 'types' field '${types}'.`);
-        }
+        this.resolverLog.log("Package has 'types' field '%s'.", types);
         module = this.findModuleFile(packageDir, types, extensions);
       } else if (isString(typings)) {
-        if (this.resolverLog) {
-          this.resolverLog.log(`Package has 'typings' field '${typings}'.`);
-        }
+        this.resolverLog.log("Package has 'typings' field '%s'.", typings);
         module = this.findModuleFile(packageDir, typings, extensions);
       }
     }
     //  Only consult the 'main' property when looking for source files.
     if (extensions.some((e) => this.extensionsSourceOnly.indexOf(e) !== -1)) {
       if (!module && isString(main)) {
-        if (this.resolverLog) {
-          this.resolverLog.log(`Package has 'main' field '${main}'.`);
-        }
+        this.resolverLog.log("Package has 'main' field '%s'.", main);
         module = this.findModuleFile(packageDir, main, extensions);
       }
     }
@@ -423,9 +467,7 @@ class ReactNativeResolverHost {
     //  Properties from package.json weren't able to resolve the module.
     //  Try resolving it to an "index" file.
     if (!module) {
-      if (this.resolverLog) {
-        this.resolverLog.log(`Searching for index file.`);
-      }
+      this.resolverLog.log("Searching for index file.");
       module = this.findModuleFile(packageDir, "index", extensions);
     }
 
@@ -444,11 +486,10 @@ class ReactNativeResolverHost {
     moduleRef: WorkspaceModuleRef,
     extensions: Extension[]
   ): ResolvedModuleFull | undefined {
-    if (this.resolverLog) {
-      this.resolverLog.log(
-        `Loading module from workspace package '${moduleRef.workspace.name}'.`
-      );
-    }
+    this.resolverLog.log(
+      "Loading module from workspace package '%s'.",
+      moduleRef.workspace.name
+    );
 
     return this.resolveModule(
       moduleRef.workspace.path,
@@ -485,11 +526,10 @@ class ReactNativeResolverHost {
       // TODO: stopDir ==> workspace root? security & perf
     });
     if (pkgDir) {
-      if (this.resolverLog) {
-        this.resolverLog.log(
-          `Loading module from external package '${pkgDir}'.`
-        );
-      }
+      this.resolverLog.log(
+        "Loading module from external package '%s'.",
+        pkgDir
+      );
 
       module = this.resolveModule(pkgDir, moduleRef.path, extensions);
       if (!module && moduleRef.path) {
@@ -512,11 +552,10 @@ class ReactNativeResolverHost {
         // TODO: stopDir ==> workspace root? security & perf
       });
       if (typesPkgDir) {
-        if (this.resolverLog) {
-          this.resolverLog.log(
-            `Loading module from external @types package '${typesPkgDir}'.`
-          );
-        }
+        this.resolverLog.log(
+          "Loading module from external @types package '%s'.",
+          typesPkgDir
+        );
 
         module = this.resolveModule(
           typesPkgDir,
@@ -553,10 +592,7 @@ class ReactNativeResolverHost {
     searchDir: string,
     extensions: Extension[]
   ): ResolvedModuleFull | undefined {
-    if (this.resolverLog) {
-      this.resolverLog.log(`Loading module from directory '${searchDir}'.`);
-    }
-
+    this.resolverLog.log("Loading module from directory '%s'.", searchDir);
     return this.findModuleFile(searchDir, moduleRef.path, extensions);
   }
 
@@ -606,12 +642,11 @@ class ReactNativeResolverHost {
     const resolutions: (ResolvedModuleFull | undefined)[] = [];
 
     for (let moduleName of moduleNames) {
-      if (this.resolverLog) {
-        this.resolverLog.clear();
-        this.resolverLog.log(
-          `======= Resolving module '${moduleName}' from '${containingFile}' =======`
-        );
-      }
+      this.resolverLog.log(
+        "======== Resolving module '%s' from '%s' ========",
+        moduleName,
+        containingFile
+      );
 
       //
       //  Replace any reference to 'react-native' with the platform-specific
@@ -645,30 +680,30 @@ class ReactNativeResolverHost {
       }
 
       resolutions.push(module);
-      if (this.resolverLog) {
-        if (module) {
-          this.resolverLog.log(
-            `File ${module.resolvedFileName} exists - using it as a module resolution result.`
-          );
-          this.resolverLog.log(
-            `======= Module name '${moduleName}' was successfully resolved to '${module.resolvedFileName}' =======`
-          );
-          if (this.showResolverLogOnSuccess) {
-            console.log(this.resolverLog.serialize());
-          }
+      if (module) {
+        this.resolverLog.log(
+          "File %s exists - using it as a module resolution result.",
+          module.resolvedFileName
+        );
+        this.resolverLog.log(
+          "======== Module name '%s' was successfully resolved to '%s' ========",
+          moduleName,
+          module.resolvedFileName
+        );
+        this.resolverLog.success();
+      } else {
+        this.resolverLog.log(
+          "Failed to resolve module %s to a file.",
+          moduleName
+        );
+        this.resolverLog.log(
+          "======== Module name '%s' failed to resolve to a file ========",
+          moduleName
+        );
+        if (this.shouldShowResolverFailure(moduleName)) {
+          this.resolverLog.failure();
         } else {
-          this.resolverLog.log(
-            `Failed to resolve module ${moduleName} to a file.`
-          );
-          this.resolverLog.log(
-            `======= Module name '${moduleName}' failed to resolve to a file' =======`
-          );
-          if (
-            this.showResolverLogOnFailure &&
-            this.shouldShowResolverFailure(moduleName)
-          ) {
-            console.log(this.resolverLog.serialize());
-          }
+          this.resolverLog.clear();
         }
       }
     }
@@ -680,10 +715,13 @@ class ReactNativeResolverHost {
     moduleName: string,
     containingFile: string
   ): ResolvedModuleWithFailedLookupLocations | undefined {
-    return this.defaultResolverHost.getResolvedModuleWithFailedLookupLocationsFromCache(
-      moduleName,
-      containingFile
-    );
+    const resolution =
+      this.defaultResolverHost.getResolvedModuleWithFailedLookupLocationsFromCache(
+        moduleName,
+        containingFile
+      );
+    this.resolverLog.success();
+    return resolution;
   }
 
   resolveTypeReferenceDirectives(
@@ -691,27 +729,31 @@ class ReactNativeResolverHost {
     containingFile: string,
     redirectedReference?: ResolvedProjectReference
   ): (ResolvedTypeReferenceDirective | undefined)[] {
-    return this.defaultResolverHost.resolveTypeReferenceDirectives(
+    const resolutions = this.defaultResolverHost.resolveTypeReferenceDirectives(
       typeDirectiveNames,
       containingFile,
       redirectedReference
     );
+    this.resolverLog.success();
+    return resolutions;
   }
 }
 
 export function createResolverHost(
   config: ProjectConfig,
   platform: string,
-  platformExtensions: string[],
+  platformExtensions: string[] | undefined,
   disableReactNativePackageSubstitution: boolean,
-  verbose: boolean
+  traceReactNativeModuleResolutionErrors: boolean,
+  traceResolutionLog: string | undefined
 ): ResolverHost {
   const host = new ReactNativeResolverHost(
+    config.options,
     platform,
     platformExtensions,
     disableReactNativePackageSubstitution,
-    verbose,
-    config.options
+    traceReactNativeModuleResolutionErrors,
+    traceResolutionLog
   );
   return host;
 }

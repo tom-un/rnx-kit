@@ -58,15 +58,17 @@ export type ResolverHost = {
  * Create a default resolver host which follows TypeScript's resolution rules.
  *
  * @param options TypeScript compiler options
+ * @param trace Optional function to use for reporting resolver trace messages. Only called when the compiler option `traceResolution` is enabled.
  * @returns Default resolver host implementation
  */
 export function createDefaultResolverHost(
-  options: ts.CompilerOptions
+  options: ts.CompilerOptions,
+  trace?: (message: string) => void
 ): ResolverHost {
   const moduleResolutionHost: ts.ModuleResolutionHost = {
     fileExists: ts.sys.fileExists,
     readFile: ts.sys.readFile,
-    trace: ts.sys.write,
+    trace: trace ?? ts.sys.write,
     directoryExists: ts.sys.directoryExists,
     realpath: ts.sys.realpath,
     getCurrentDirectory: ts.sys.getCurrentDirectory,
