@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import { findPackage, PackageManifest, readPackage } from "@rnx-kit/tools-node";
+import { addRange } from "@rnx-kit/tools-language";
+import {
+  findPackage,
+  readPackage,
+  isDirectory,
+  isFile,
+} from "@rnx-kit/tools-node";
 import { createResolverHost } from "@rnx-kit/typescript-react-native-resolver";
 import {
   Service,
@@ -12,189 +18,12 @@ import child_process from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import util from "util";
+import { usage } from "./usage";
 
 // TODO: remove this -- careful, it is needed for running 'tsc', not just access ts APIs
 import ts from "typescript";
 
-function wrapAndIndent(spaces: number, s: string): string {
-  const indentText = " ".repeat(spaces);
-  const width = Math.max(process.stdout.columns, 80);
-
-  const words = s.split(" ");
-
-  let text = indentText;
-  let column = indentText.length;
-  for (const word of words) {
-    if (column + word.length >= width) {
-      text += os.EOL + indentText + word;
-      column = indentText.length + word.length;
-    } else if (column > indentText.length) {
-      text += " " + word;
-      column += 1 + word.length;
-    } else {
-      text += word;
-      column += word.length;
-    }
-  }
-
-  return text;
-}
-
-function createUsageColors() {
-  const showColors = process.stdout.isTTY && !process.env["NO_COLOR"];
-  if (!showColors) {
-    return {
-      bold: function (s: string): string {
-        return s;
-      },
-      blue: function (s: string): string {
-        return s;
-      },
-      blueBackground: function (s: string): string {
-        return s;
-      },
-      brightWhite: function (s: string): string {
-        return s;
-      },
-    };
-  }
-
-  function bold(s: string): string {
-    return "\u001B[1m" + s + "\u001B[22m";
-  }
-
-  const isWindows =
-    process.env["OS"] &&
-    process.env["OS"].toLowerCase().indexOf("windows") !== -1;
-  const isWindowsTerminal = process.env["WT_SESSION"];
-  const isVSCode =
-    process.env["TERM_PROGRAM"] && process.env["TERM_PROGRAM"] === "vscode";
-
-  function blue(s: string): string {
-    if (isWindows && !isWindowsTerminal && !isVSCode) {
-      return brightWhite(s);
-    }
-
-    return "\u001B[94m" + s + "\u001B[39m";
-  }
-
-  const supportsRicherColors =
-    process.env["COLORTERM"] === "truecolor" ||
-    process.env["TERM"] === "xterm-256color";
-
-  function blueBackground(s: string): string {
-    if (supportsRicherColors) {
-      return "\u001B[48;5;68m" + s + "\u001B[39;49m";
-    } else {
-      return "\u001B[44m" + s + "\u001B[39;49m";
-    }
-  }
-
-  function brightWhite(s: string): string {
-    return "\u001B[97m" + s + "\u001B[39m";
-  }
-
-  return {
-    bold,
-    blue,
-    brightWhite,
-    blueBackground,
-  };
-}
-
-const usageColors = createUsageColors();
-
-function usageSection(header: string): void {
-  console.log(usageColors.bold(usageColors.brightWhite(header)) + os.EOL);
-}
-
-function usageCommandLine(script: string, params: string): void {
-  console.log(
-    wrapAndIndent(2, usageColors.blue(script + " " + params)) + os.EOL
-  );
-}
-
-function usageOption(text: string, description: string): void {
-  console.log(wrapAndIndent(2, usageColors.blue(text)));
-  console.log(wrapAndIndent(2, usageColors.brightWhite(description)) + os.EOL);
-}
-
-function usageExampleHeader(): void {
-  console.log(usageColors.brightWhite(wrapAndIndent(4, "Example:")));
-}
-
-function usageExample(text: string, description: string): void {
-  console.log(wrapAndIndent(6, usageColors.blue(text)));
-  console.log(wrapAndIndent(6, usageColors.brightWhite(description)) + os.EOL);
-}
-
-function usage() {
-  const { base: scriptName, name: scriptNameNoExt } = path.parse(
-    process.argv[1]
-  );
-  const pkgFile = findPackage(__dirname);
-  let pkg: PackageManifest | undefined;
-  if (pkgFile) {
-    pkg = readPackage(pkgFile);
-  }
-
-  const usageHeader = util.format(
-    "%s: TypeScript with react-native - Version %s",
-    scriptNameNoExt,
-    pkg?.version ?? "Unknown"
-  );
-
-  console.log(
-    usageColors.brightWhite(usageHeader) +
-      " ".repeat(process.stdout.columns - usageHeader.length - 5) +
-      usageColors.blueBackground(usageColors.brightWhite(" RN  "))
-  );
-  console.log(
-    " ".repeat(process.stdout.columns - 5) +
-      usageColors.blueBackground(usageColors.brightWhite("  TS "))
-  );
-
-  usageSection("USAGE");
-
-  usageCommandLine(scriptName, `[${scriptNameNoExt} options] [tsc options]`);
-
-  usageSection(`${scriptNameNoExt.toUpperCase()} OPTIONS`);
-
-  usageOption(
-    "--platform <p>",
-    "Target react-native platform. This must refer to a platform which has a react-native implementation, such as ios, android, windows or macos. When given, react-native module resolution is used. Otherwise, modules are resolved using the configured TypeScript strategy."
-  );
-  usageOption(
-    "--platformExtensions <ext-1>[,<ext-2>[...<ext-N>]]",
-    "List of platform file extensions to use when resolving react-native modules. Resolution always starts with the --platform name, followed by these extensions, ordered from highest precedence (ext-1) to lowest (ext-N)."
-  );
-  usageExampleHeader();
-  usageExample(
-    `${scriptName} --platform ios --platformExtensions mobile,native`,
-    "Resolution of module 'm' searchs for m.ios.* first, then m.mobile.*, m.native.*, and finally m.* (no extension)."
-  );
-  usageOption(
-    "--disableReactNativePackageSubstitution",
-    "The react-native resolver maps module references from 'react-native' to the target platform's implementation, such as 'react-native-windows' for Windows, and 'react-native-macos' MacOS. This option disables that behavior."
-  );
-  usageOption(
-    "--traceReactNativeModuleResolutionErrors",
-    "When the react-native resolver is active, display a detailed report whenever it fails to map a module to a file name."
-  );
-  usageOption(
-    "--traceResolutionLog <logFile>",
-    "Write all resolution trace messages to a log file, instead of to the console. Trace messages are appended to the end of the file, and it is created if it doesn't exist."
-  );
-
-  if (pkg?.homepage) {
-    console.log(
-      chalk.ansi(97)(`Full documentation: ${pkg.homepage}`) + os.EOL + os.EOL
-    );
-  }
-}
-
-function tsc(...args: string[]): number | undefined {
+function tsc(...args: string[]): number {
   const child = child_process.spawnSync(
     process.execPath,
     [require.resolve("typescript/lib/tsc"), ...args],
@@ -202,51 +31,10 @@ function tsc(...args: string[]): number | undefined {
       stdio: "inherit",
     }
   );
-  process.exit(child.status ?? 0);
-}
 
-// TODO: move to tools-node
-function statSync(p: string): fs.Stats | undefined {
-  try {
-    return fs.statSync(p);
-  } catch (_) {
-    return undefined;
-  }
-}
-
-function isDirectory(p: string): boolean {
-  return statSync(p)?.isDirectory() ?? false;
-}
-
-function isFile(p: string): boolean {
-  return statSync(p)?.isFile() ?? false;
-}
-
-// TODO: move to tools-language
-function toOffset<T>(array: readonly T[], offset: number) {
-  return offset < 0 ? array.length + offset : offset;
-}
-
-function addRange<T>(
-  to: T[] | undefined,
-  from: readonly T[] | undefined,
-  start?: number,
-  end?: number
-) {
-  if (from === undefined || from.length === 0) {
-    return to;
-  }
-  if (to === undefined) {
-    return from.slice(start, end);
-  }
-  start = start === undefined ? 0 : toOffset(from, start);
-  end = end === undefined ? from.length : toOffset(from, end);
-  for (let i = start; i < end && i < from.length; i++) {
-    if (from[i] !== undefined) {
-      to.push(from[i]);
-    }
-  }
-  return to;
+  // No status means that the child process exited because of a signal.
+  // Treat that as an internal error.
+  return child.status ?? ExitCode.InternalError;
 }
 
 const enum ExitCode {
@@ -409,15 +197,15 @@ function cli(): ExitCode {
     } else {
       console.log("rn-tsc Version <unknown>");
     }
-    return tsc("--version") ?? ExitCode.Success;
+    return tsc("--version");
   }
   if (parsedCommandLine.options.help) {
     usage();
-    return tsc("--help") ?? ExitCode.Success;
+    return tsc("--help");
   }
   if (parsedCommandLine.options.all) {
     usage();
-    return tsc("--all") ?? ExitCode.Success;
+    return tsc("--all");
   }
 
   let configFileName: string | undefined = undefined;
@@ -459,7 +247,7 @@ function cli(): ExitCode {
   // if not, then print help and exit.
   if (parsedCommandLine.fileNames.length === 0 && !configFileName) {
     usage();
-    return tsc("--help") ?? ExitCode.Success;
+    return tsc("--help");
   }
 
   // TODO: needed?

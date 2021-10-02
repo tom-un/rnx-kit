@@ -17,6 +17,8 @@ import {
   readPackage,
   getMangledPackageName,
   FileModuleRef,
+  isDirectory,
+  isFile,
 } from "@rnx-kit/tools-node";
 import fs from "fs";
 import isString from "lodash/isString";
@@ -25,25 +27,6 @@ import os from "os";
 import path from "path";
 import util from "util";
 import { getWorkspaces, WorkspaceInfo } from "workspace-tools";
-
-// TODO: use @rnx-kit/console
-
-// TODO: move to tools-node
-function statSync(p: string): fs.Stats | undefined {
-  try {
-    return fs.statSync(p);
-  } catch (_) {
-    return undefined;
-  }
-}
-
-function isDirectory(p: string): boolean {
-  return statSync(p)?.isDirectory() ?? false;
-}
-
-function isFile(p: string): boolean {
-  return statSync(p)?.isFile() ?? false;
-}
 
 /**
  * Get the name of an out-of-tree platform's react-native package.
