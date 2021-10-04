@@ -2,72 +2,10 @@ import { findPackage, PackageManifest, readPackage } from "@rnx-kit/tools-node";
 import os from "os";
 import path from "path";
 import util from "util";
+import { UsageColors, createUsageColors } from "./colors";
+import { wrapAndIndent } from "./text";
 
-interface UsageColors {
-  bold(s: string): string;
-  blue(s: string): string;
-  blueBackground(s: string): string;
-  brightWhite(s: string): string;
-}
-
-function createUsageColors(): UsageColors {
-  const showColors = process.stdout.isTTY && !process.env["NO_COLOR"];
-  if (!showColors) {
-    const nop = (s: string): string => {
-      return s;
-    };
-    return {
-      bold: nop,
-      blue: nop,
-      blueBackground: nop,
-      brightWhite: nop,
-    };
-  }
-
-  function bold(s: string): string {
-    return "\u001B[1m" + s + "\u001B[22m";
-  }
-
-  const isWindows =
-    process.env["OS"] &&
-    process.env["OS"].toLowerCase().indexOf("windows") !== -1;
-  const isWindowsTerminal = process.env["WT_SESSION"];
-  const isVSCode =
-    process.env["TERM_PROGRAM"] && process.env["TERM_PROGRAM"] === "vscode";
-
-  function blue(s: string): string {
-    if (isWindows && !isWindowsTerminal && !isVSCode) {
-      return brightWhite(s);
-    }
-
-    return "\u001B[94m" + s + "\u001B[39m";
-  }
-
-  const supportsRicherColors =
-    process.env["COLORTERM"] === "truecolor" ||
-    process.env["TERM"] === "xterm-256color";
-
-  function blueBackground(s: string): string {
-    if (supportsRicherColors) {
-      return "\u001B[48;5;68m" + s + "\u001B[39;49m";
-    } else {
-      return "\u001B[44m" + s + "\u001B[39;49m";
-    }
-  }
-
-  function brightWhite(s: string): string {
-    return "\u001B[97m" + s + "\u001B[39m";
-  }
-
-  return {
-    bold,
-    blue,
-    brightWhite,
-    blueBackground,
-  };
-}
-
-class Usage {
+export class Usage {
   private colors: UsageColors;
   private columns: number;
 
@@ -88,7 +26,11 @@ class Usage {
     this.pkg = pkgFile ? readPackage(pkgFile) : undefined;
   }
 
-  print(): void {
+  private print(spacesToIndent: number, message: string): void {
+    console.log(wrapAndIndent(spacesToIndent, this.columns, message));
+  }
+
+  show(): void {
     this.preamble();
 
     this.section("USAGE");
@@ -135,39 +77,6 @@ class Usage {
     }
   }
 
-  private wrapAndIndent(spaces: number, s: string): string {
-    const indentText = " ".repeat(spaces);
-
-    const words = s.split(" ");
-
-    let text = indentText;
-    let column = indentText.length;
-
-    // Alawys print the first word on the first line. Pulling this out
-    // of the loop makes the conditions for indenting and wrapping
-    // simpler.
-    const firstWord = words.shift();
-    text += firstWord;
-    column += firstWord?.length ?? 0;
-
-    for (const word of words) {
-      // Print a separator before printing the word. Use a space if the
-      // word fits on the current line. Otherwise, wrap to the next line.
-      if (column + 1 + word.length < this.columns) {
-        text += " ";
-        column += 1;
-      } else {
-        text += os.EOL + indentText;
-        column = indentText.length;
-      }
-
-      text += word;
-      column += word.length;
-    }
-
-    return text;
-  }
-
   preamble(): void {
     const message = util.format(
       "%s: TypeScript with react-native - Version %s",
@@ -187,35 +96,24 @@ class Usage {
   }
 
   section(header: string): void {
-    console.log(this.colors.bold(this.colors.brightWhite(header)) + os.EOL);
+    this.print(0, this.colors.bold(this.colors.brightWhite(header)) + os.EOL);
   }
 
   commandLine(script: string, params: string): void {
-    console.log(
-      this.wrapAndIndent(2, this.colors.blue(script + " " + params)) + os.EOL
-    );
+    this.print(2, this.colors.blue(script + " " + params) + os.EOL);
   }
 
   option(text: string, description: string): void {
-    console.log(this.wrapAndIndent(2, this.colors.blue(text)));
-    console.log(
-      this.wrapAndIndent(2, this.colors.brightWhite(description)) + os.EOL
-    );
+    this.print(2, this.colors.blue(text));
+    this.print(2, this.colors.brightWhite(description) + os.EOL);
   }
 
   exampleHeader(): void {
-    console.log(this.colors.brightWhite(this.wrapAndIndent(4, "Example:")));
+    this.print(4, this.colors.brightWhite("Example:"));
   }
 
   example(text: string, description: string): void {
-    console.log(this.wrapAndIndent(6, this.colors.blue(text)));
-    console.log(
-      this.wrapAndIndent(6, this.colors.brightWhite(description)) + os.EOL
-    );
+    this.print(6, this.colors.blue(text));
+    this.print(6, this.colors.brightWhite(description) + os.EOL);
   }
-}
-
-export function usage(): void {
-  const usage = new Usage();
-  usage.print();
 }
