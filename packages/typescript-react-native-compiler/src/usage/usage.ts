@@ -90,7 +90,7 @@ export class Usage {
         this.colors.blueBackground(this.colors.brightWhite(" RN  "))
     );
     console.log(
-      " ".repeat(process.stdout.columns - 5) +
+      " ".repeat(this.columns - 5) +
         this.colors.blueBackground(this.colors.brightWhite("  TS "))
     );
   }
