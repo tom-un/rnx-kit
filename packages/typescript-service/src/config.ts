@@ -1,52 +1,41 @@
 import ts from "typescript";
-import { DiagnosticWriter } from "./diagnostics";
-import { isNonEmptyArray } from "./util";
+import { createDiagnosticWriter } from "./diagnostics";
 
-export type ProjectConfig = ts.ParsedCommandLine;
+export function findConfigFile(
+  searchPath: string,
+  fileName = "tsconfig.json"
+): string | undefined {
+  return ts.findConfigFile(searchPath, ts.sys.fileExists, fileName);
+}
 
-export class ProjectConfigLoader {
-  private diagnosticWriter: DiagnosticWriter;
-  private parseConfigFileHost: ts.ParseConfigFileHost;
-  private extendedConfigCache: ts.ESMap<string, ts.ExtendedConfigCacheEntry>;
-
-  constructor(diagnosticWriter: DiagnosticWriter) {
-    this.diagnosticWriter = diagnosticWriter;
-    this.parseConfigFileHost = {
-      useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
-      readDirectory: ts.sys.readDirectory,
-      fileExists: ts.sys.fileExists,
-      readFile: ts.sys.readFile,
-      getCurrentDirectory: ts.sys.getCurrentDirectory,
-      onUnRecoverableConfigFileDiagnostic: diagnosticWriter.print,
-    };
-    this.extendedConfigCache = new Map();
+export function readConfigFile(
+  configFileName: string,
+  optionsToExtend?: ts.CompilerOptions,
+  watchOptionsToExtend?: ts.WatchOptions,
+  onUnRecoverableConfigFileDiagnostic?: (diagnostic: ts.Diagnostic) => void,
+  trace?: (message: string) => void
+): ts.ParsedCommandLine | undefined {
+  if (!onUnRecoverableConfigFileDiagnostic) {
+    const writer = createDiagnosticWriter();
+    onUnRecoverableConfigFileDiagnostic = writer.print;
   }
+  const host: ts.ParseConfigFileHost = {
+    useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+    readDirectory: ts.sys.readDirectory,
+    fileExists: ts.sys.fileExists,
+    readFile: ts.sys.readFile,
+    trace,
+    onUnRecoverableConfigFileDiagnostic,
+    getCurrentDirectory: ts.sys.getCurrentDirectory,
+  };
 
-  find(searchPath: string, fileName = "tsconfig.json"): string | undefined {
-    return ts.findConfigFile(searchPath, ts.sys.fileExists, fileName);
-  }
+  const extendedConfigCache = new Map();
 
-  load(
-    configFileName: string,
-    optionsToExtend?: ts.CompilerOptions,
-    watchOptionsToExtend?: ts.WatchOptions
-  ): ProjectConfig {
-    const commandLine = ts.getParsedCommandLineOfConfigFile(
-      configFileName,
-      optionsToExtend,
-      this.parseConfigFileHost,
-      this.extendedConfigCache,
-      watchOptionsToExtend
-    );
-    if (!commandLine) {
-      throw new Error(`Failed to load '${configFileName}'`);
-    }
-
-    if (isNonEmptyArray(commandLine.errors)) {
-      commandLine.errors.forEach((e) => this.diagnosticWriter.print(e));
-      throw new Error(`Failed to load '${configFileName}'`);
-    }
-
-    return commandLine;
-  }
+  return ts.getParsedCommandLineOfConfigFile(
+    configFileName,
+    optionsToExtend,
+    host,
+    extendedConfigCache,
+    watchOptionsToExtend
+  );
 }

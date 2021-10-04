@@ -1,8 +1,14 @@
-export * from "./cache";
-export * from "./command-line";
-export * from "./config";
-export * from "./diagnostics";
-export * from "./project";
-export * from "./resolve";
-export * from "./snapshot";
-export * from "./service";
+// Diagnostics
+export type { DiagnosticWriter } from "./diagnostics";
+export { createDiagnosticWriter } from "./diagnostics";
+
+// Configuration
+export { findConfigFile, readConfigFile } from "./config";
+
+// Module resolution
+export type { ResolverHost } from "./resolve";
+export { createDefaultResolverHost } from "./resolve";
+
+// Language services
+export { Service } from "./service";
+export { Project } from "./project";

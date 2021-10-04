@@ -22,13 +22,6 @@ describe("Service", () => {
     jest.resetAllMocks();
   });
 
-  test("getProjectConfigLoader() returns a valid object", () => {
-    const service = new Service();
-    const loader = service.getProjectConfigLoader();
-    expect(loader).not.toBeNil();
-    expect(loader).toBeObject();
-  });
-
   test("openProject() returns a valid object", () => {
     const service = new Service();
     const config = { fileNames: [] } as ts.ParsedCommandLine;
