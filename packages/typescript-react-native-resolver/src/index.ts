@@ -1,30 +1,25 @@
 import {
-  createDefaultResolverHost,
-  ProjectConfig,
-  Extension,
-  ResolvedModuleFull,
-  ResolvedModuleWithFailedLookupLocations,
-  ResolvedProjectReference,
-  ResolvedTypeReferenceDirective,
-  ResolverHost,
-} from "@rnx-kit/typescript-service";
-import {
-  findPackageDependencyDir,
-  isPackageModuleRef,
-  isFileModuleRef,
-  parseModuleRef,
-  PackageModuleRef,
-  readPackage,
-  getMangledPackageName,
   FileModuleRef,
+  findPackageDependencyDir,
+  getMangledPackageName,
   isDirectory,
   isFile,
+  isFileModuleRef,
+  isPackageModuleRef,
+  PackageModuleRef,
+  parseModuleRef,
+  readPackage,
 } from "@rnx-kit/tools-node";
+import {
+  createDefaultResolverHost,
+  ResolverHost,
+} from "@rnx-kit/typescript-service";
 import fs from "fs";
 import isString from "lodash/isString";
 import { builtinModules } from "module";
 import os from "os";
 import path from "path";
+import ts from "typescript";
 import util from "util";
 import { getWorkspaces, WorkspaceInfo } from "workspace-tools";
 
@@ -49,19 +44,19 @@ export function getReactNativePackageName(
 }
 
 const Extensions = [
-  Extension.Dts,
-  Extension.Tsx,
-  Extension.Ts,
-  Extension.Json,
-  Extension.Jsx,
-  Extension.Js,
+  ts.Extension.Dts,
+  ts.Extension.Tsx,
+  ts.Extension.Ts,
+  ts.Extension.Json,
+  ts.Extension.Jsx,
+  ts.Extension.Js,
 ];
 
-function hasExtension(p: string, ext: Extension): boolean {
+function hasExtension(p: string, ext: ts.Extension): boolean {
   return p.length > ext.length && p.endsWith(ext);
 }
 
-function getExtensionFromPath(p: string): Extension | undefined {
+function getExtensionFromPath(p: string): ts.Extension | undefined {
   return Extensions.find((e) => hasExtension(p, e));
 }
 
@@ -140,7 +135,7 @@ class ResolverLog {
  * Implementation of ResolverHost for use with react-native applications.
  */
 class ReactNativeResolverHost {
-  private options: ProjectConfig["options"];
+  private options: ts.ParsedCommandLine["options"];
   private platform: string;
   private platformExtensions: string[];
   private disableReactNativePackageSubstitution: boolean;
@@ -152,11 +147,11 @@ class ReactNativeResolverHost {
 
   private workspaces: WorkspaceInfo;
 
-  private extensionsTypeScript: Extension[];
-  private extensionsAll: Extension[];
+  private extensionsTypeScript: ts.Extension[];
+  private extensionsAll: ts.Extension[];
 
   constructor(
-    options: ProjectConfig["options"],
+    options: ts.ParsedCommandLine["options"],
     platform: string,
     platformExtensions: string[] | undefined,
     disableReactNativePackageSubstitution: boolean,
@@ -190,13 +185,17 @@ class ReactNativeResolverHost {
 
     this.workspaces = getWorkspaces(process.cwd());
 
-    this.extensionsTypeScript = [Extension.Ts, Extension.Tsx, Extension.Dts];
-    this.extensionsAll = [Extension.Ts, Extension.Tsx, Extension.Dts];
+    this.extensionsTypeScript = [
+      ts.Extension.Ts,
+      ts.Extension.Tsx,
+      ts.Extension.Dts,
+    ];
+    this.extensionsAll = [ts.Extension.Ts, ts.Extension.Tsx, ts.Extension.Dts];
     if (this.options.checkJs) {
-      this.extensionsAll.push(Extension.Js, Extension.Jsx);
+      this.extensionsAll.push(ts.Extension.Js, ts.Extension.Jsx);
     }
     if (this.options.resolveJsonModule) {
-      this.extensionsAll.push(Extension.Json);
+      this.extensionsAll.push(ts.Extension.Json);
     }
   }
 
@@ -343,8 +342,8 @@ class ReactNativeResolverHost {
   private findModuleFile(
     searchDir: string,
     modulePath: string,
-    extensions: Extension[]
-  ): ResolvedModuleFull | undefined {
+    extensions: ts.Extension[]
+  ): ts.ResolvedModuleFull | undefined {
     // TODO: security: if join(searchDir, modulePath) takes you outside of searchDir, return undefined without touching the disk
 
     //
@@ -377,7 +376,7 @@ class ReactNativeResolverHost {
       }
     }
 
-    if (extension === Extension.Js || extension === Extension.Jsx) {
+    if (extension === ts.Extension.Js || extension === ts.Extension.Jsx) {
       //
       //  The module was not found, but it has a JavaScript extension.
       //  Repeat the broad search, without the extension.
@@ -433,14 +432,14 @@ class ReactNativeResolverHost {
   private resolveModule(
     packageDir: string,
     modulePath: string | undefined,
-    extensions: Extension[]
-  ): ResolvedModuleFull | undefined {
+    extensions: ts.Extension[]
+  ): ts.ResolvedModuleFull | undefined {
     //  A module path was given. Use that to resolve the module to a file.
     if (modulePath) {
       return this.findModuleFile(packageDir, modulePath, extensions);
     }
 
-    let module: ResolvedModuleFull | undefined;
+    let module: ts.ResolvedModuleFull | undefined;
 
     //  No path was given. Try resolving the module using package.json
     //  properties.
@@ -448,7 +447,7 @@ class ReactNativeResolverHost {
 
     //  Only consult 'types' and 'typings' properties when looking for
     //  type files (.d.ts).
-    if (extensions.indexOf(Extension.Dts) !== -1) {
+    if (extensions.indexOf(ts.Extension.Dts) !== -1) {
       if (isString(types)) {
         this.resolverLog.log("Package has 'types' field '%s'.", types);
         module = this.findModuleFile(packageDir, types, extensions);
@@ -482,8 +481,8 @@ class ReactNativeResolverHost {
    */
   private resolveWorkspaceModule(
     moduleRef: WorkspaceModuleRef,
-    extensions: Extension[]
-  ): ResolvedModuleFull | undefined {
+    extensions: ts.Extension[]
+  ): ts.ResolvedModuleFull | undefined {
     this.resolverLog.log(
       "Loading module from workspace package '%s'.",
       moduleRef.workspace.name
@@ -514,9 +513,9 @@ class ReactNativeResolverHost {
   private resolvePackageModule(
     moduleRef: PackageModuleRef,
     searchDir: string,
-    extensions: Extension[]
-  ): ResolvedModuleFull | undefined {
-    let module: ResolvedModuleFull | undefined = undefined;
+    extensions: ts.Extension[]
+  ): ts.ResolvedModuleFull | undefined {
+    let module: ts.ResolvedModuleFull | undefined = undefined;
 
     // Resolve the module to a file within the package
     const pkgDir = findPackageDependencyDir(moduleRef, {
@@ -534,7 +533,7 @@ class ReactNativeResolverHost {
         // Try again, without using a path, but only look for type (.d.ts)
         // files. Hand-crafted type modules in the package don't have to
         // use the same file layout as the associated JS/TS module.
-        module = this.resolveModule(pkgDir, undefined, [Extension.Dts]);
+        module = this.resolveModule(pkgDir, undefined, [ts.Extension.Dts]);
       }
     }
 
@@ -563,7 +562,9 @@ class ReactNativeResolverHost {
         if (!module && typesModuleRef.path) {
           // Try again, without using a path. @types modules don't have to use
           // the same file layout as the associated JS/TS module.
-          module = this.resolveModule(typesPkgDir, undefined, [Extension.Dts]);
+          module = this.resolveModule(typesPkgDir, undefined, [
+            ts.Extension.Dts,
+          ]);
         }
       }
     }
@@ -584,8 +585,8 @@ class ReactNativeResolverHost {
   private resolveFileModule(
     moduleRef: FileModuleRef,
     searchDir: string,
-    extensions: Extension[]
-  ): ResolvedModuleFull | undefined {
+    extensions: ts.Extension[]
+  ): ts.ResolvedModuleFull | undefined {
     this.resolverLog.log("Loading module from directory '%s'.", searchDir);
     return this.findModuleFile(searchDir, moduleRef.path, extensions);
   }
@@ -629,17 +630,17 @@ class ReactNativeResolverHost {
     moduleNames: string[],
     containingFile: string,
     _reusedNames: string[] | undefined,
-    _redirectedReference?: ResolvedProjectReference
-  ): (ResolvedModuleFull | undefined)[] {
+    _redirectedReference?: ts.ResolvedProjectReference
+  ): (ts.ResolvedModuleFull | undefined)[] {
     //
     //  If the containing file is a type file (.d.ts), it can only import
     //  other type files. Restrict module resolution accordingly.
     //
-    const extensions = hasExtension(containingFile, Extension.Dts)
+    const extensions = hasExtension(containingFile, ts.Extension.Dts)
       ? this.extensionsTypeScript
       : this.extensionsAll;
 
-    const resolutions: (ResolvedModuleFull | undefined)[] = [];
+    const resolutions: (ts.ResolvedModuleFull | undefined)[] = [];
 
     for (let moduleName of moduleNames) {
       this.resolverLog.log(
@@ -654,7 +655,7 @@ class ReactNativeResolverHost {
       //
       moduleName = this.replaceReactNativePackageName(moduleName);
 
-      let module: ResolvedModuleFull | undefined = undefined;
+      let module: ts.ResolvedModuleFull | undefined = undefined;
 
       const workspaceRef = this.queryWorkspaceModuleRef(
         moduleName,
@@ -714,7 +715,7 @@ class ReactNativeResolverHost {
   getResolvedModuleWithFailedLookupLocationsFromCache(
     moduleName: string,
     containingFile: string
-  ): ResolvedModuleWithFailedLookupLocations | undefined {
+  ): ts.ResolvedModuleWithFailedLookupLocations | undefined {
     const resolution =
       this.defaultResolverHost.getResolvedModuleWithFailedLookupLocationsFromCache(
         moduleName,
@@ -727,8 +728,8 @@ class ReactNativeResolverHost {
   resolveTypeReferenceDirectives(
     typeDirectiveNames: string[],
     containingFile: string,
-    redirectedReference?: ResolvedProjectReference
-  ): (ResolvedTypeReferenceDirective | undefined)[] {
+    redirectedReference?: ts.ResolvedProjectReference
+  ): (ts.ResolvedTypeReferenceDirective | undefined)[] {
     const resolutions = this.defaultResolverHost.resolveTypeReferenceDirectives(
       typeDirectiveNames,
       containingFile,
@@ -740,7 +741,7 @@ class ReactNativeResolverHost {
 }
 
 export function createResolverHost(
-  config: ProjectConfig,
+  cmdLine: ts.ParsedCommandLine,
   platform: string,
   platformExtensions: string[] | undefined,
   disableReactNativePackageSubstitution: boolean,
@@ -748,7 +749,7 @@ export function createResolverHost(
   traceResolutionLog: string | undefined
 ): ResolverHost {
   const host = new ReactNativeResolverHost(
-    config.options,
+    cmdLine.options,
     platform,
     platformExtensions,
     disableReactNativePackageSubstitution,
