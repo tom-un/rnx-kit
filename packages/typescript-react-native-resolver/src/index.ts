@@ -76,23 +76,52 @@ const enum ResolverLogMode {
 
 class ResolverLog {
   private mode: ResolverLogMode;
+  private buffering: boolean;
   private messages: string[];
   private logFile: string | undefined;
 
   constructor(mode: ResolverLogMode, logFile?: string) {
     this.mode = mode;
+    this.buffering = false;
     this.messages = [];
     this.logFile = logFile;
   }
 
-  isEnabled(): boolean {
-    return this.mode !== ResolverLogMode.Never;
+  begin(): void {
+    this.buffering = true;
   }
 
   log(format: string, ...args: string[]): void {
-    if (this.isEnabled()) {
+    if (this.mode !== ResolverLogMode.Never) {
       this.messages.push(util.format(format, ...args));
+      if (!this.buffering) {
+        this.endSuccess();
+      }
     }
+  }
+
+  endSuccess(): void {
+    if (this.mode === ResolverLogMode.Always) {
+      this.flush();
+    }
+    this.reset();
+  }
+
+  endFailure(): void {
+    if (
+      this.mode === ResolverLogMode.OnFailure ||
+      this.mode === ResolverLogMode.Always
+    ) {
+      this.flush();
+    }
+    this.reset();
+  }
+
+  reset(): void {
+    if (this.mode !== ResolverLogMode.Never) {
+      this.messages = [];
+    }
+    this.buffering = false;
   }
 
   private flush(): void {
@@ -106,35 +135,12 @@ class ResolverLog {
       console.log(messages);
     }
   }
-
-  clear(): void {
-    if (this.isEnabled()) {
-      this.messages = [];
-    }
-  }
-
-  success(): void {
-    if (this.mode === ResolverLogMode.Always) {
-      this.flush();
-    }
-    this.clear();
-  }
-
-  failure(): void {
-    if (
-      this.mode === ResolverLogMode.OnFailure ||
-      this.mode === ResolverLogMode.Always
-    ) {
-      this.flush();
-    }
-    this.clear();
-  }
 }
 
 /**
  * Implementation of ResolverHost for use with react-native applications.
  */
-class ReactNativeResolverHost {
+export class ReactNativeResolverHost {
   private options: ts.ParsedCommandLine["options"];
   private platform: string;
   private platformExtensions: string[];
@@ -151,6 +157,7 @@ class ReactNativeResolverHost {
   private extensionsAll: ts.Extension[];
 
   constructor(
+    moduleResolutionHost: ts.ModuleResolutionHost,
     options: ts.ParsedCommandLine["options"],
     platform: string,
     platformExtensions: string[] | undefined,
@@ -178,7 +185,7 @@ class ReactNativeResolverHost {
     this.resolverLog = new ResolverLog(mode, traceResolutionLog);
     this.defaultResolverHost = createDefaultResolverHost(
       options,
-      this.resolverLog.log.bind(this.resolverLog)
+      moduleResolutionHost
     );
 
     this.reactNativePackageName = getReactNativePackageName(this.platform);
@@ -622,10 +629,6 @@ class ReactNativeResolverHost {
     return true;
   }
 
-  //
-  //  ResolverHost API
-  //
-
   resolveModuleNames(
     moduleNames: string[],
     containingFile: string,
@@ -643,6 +646,7 @@ class ReactNativeResolverHost {
     const resolutions: (ts.ResolvedModuleFull | undefined)[] = [];
 
     for (let moduleName of moduleNames) {
+      this.resolverLog.begin();
       this.resolverLog.log(
         "======== Resolving module '%s' from '%s' ========",
         moduleName,
@@ -691,7 +695,7 @@ class ReactNativeResolverHost {
           moduleName,
           module.resolvedFileName
         );
-        this.resolverLog.success();
+        this.resolverLog.endSuccess();
       } else {
         this.resolverLog.log(
           "Failed to resolve module %s to a file.",
@@ -702,9 +706,9 @@ class ReactNativeResolverHost {
           moduleName
         );
         if (this.shouldShowResolverFailure(moduleName)) {
-          this.resolverLog.failure();
+          this.resolverLog.endFailure();
         } else {
-          this.resolverLog.clear();
+          this.resolverLog.reset();
         }
       }
     }
@@ -716,12 +720,13 @@ class ReactNativeResolverHost {
     moduleName: string,
     containingFile: string
   ): ts.ResolvedModuleWithFailedLookupLocations | undefined {
+    this.resolverLog.begin();
     const resolution =
       this.defaultResolverHost.getResolvedModuleWithFailedLookupLocationsFromCache(
         moduleName,
         containingFile
       );
-    this.resolverLog.success();
+    this.resolverLog.endSuccess();
     return resolution;
   }
 
@@ -730,31 +735,17 @@ class ReactNativeResolverHost {
     containingFile: string,
     redirectedReference?: ts.ResolvedProjectReference
   ): (ts.ResolvedTypeReferenceDirective | undefined)[] {
+    this.resolverLog.begin();
     const resolutions = this.defaultResolverHost.resolveTypeReferenceDirectives(
       typeDirectiveNames,
       containingFile,
       redirectedReference
     );
-    this.resolverLog.success();
+    this.resolverLog.endSuccess();
     return resolutions;
   }
-}
 
-export function createResolverHost(
-  cmdLine: ts.ParsedCommandLine,
-  platform: string,
-  platformExtensions: string[] | undefined,
-  disableReactNativePackageSubstitution: boolean,
-  traceReactNativeModuleResolutionErrors: boolean,
-  traceResolutionLog: string | undefined
-): ResolverHost {
-  const host = new ReactNativeResolverHost(
-    cmdLine.options,
-    platform,
-    platformExtensions,
-    disableReactNativePackageSubstitution,
-    traceReactNativeModuleResolutionErrors,
-    traceResolutionLog
-  );
-  return host;
+  trace(message: string): void {
+    this.resolverLog.log(message);
+  }
 }

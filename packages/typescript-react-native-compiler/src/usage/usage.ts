@@ -117,3 +117,8 @@ export class Usage {
     this.print(6, this.colors.brightWhite(description) + os.EOL);
   }
 }
+
+export function usage(): void {
+  const usage = new Usage();
+  usage.show();
+}

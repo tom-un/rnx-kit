@@ -7,8 +7,8 @@
   "files": [
     "lib/*"
   ],
-  "main": "./lib/rn-tsc.js",
-  "types": "./lib/rn-tsc.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "bin": {
     "rn-tsc": "lib/rn-tsc.js"
   },
@@ -48,15 +48,5 @@
   },
   "eslintConfig": {
     "extends": "@rnx-kit/eslint-config"
-  },
-  "jest": {
-    "preset": "@rnx-kit/jest-preset",
-    "setupFilesAfterEnv": [
-      "jest-extended"
-    ],
-    "roots": [
-      "test"
-    ],
-    "testRegex": "/test/.*\\.test\\.ts$"
   }
 }
