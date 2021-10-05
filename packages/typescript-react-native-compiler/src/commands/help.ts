@@ -1,4 +1,4 @@
-import { usage } from "./usage";
+import { usage } from "../usage";
 import { tsc } from "./tsc";
 
 export function showHelp(): void {
