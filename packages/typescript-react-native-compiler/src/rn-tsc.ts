@@ -8,10 +8,10 @@ try {
   cli();
   process.exit(0);
 } catch (e) {
-  if (typeof e === "object" && e !== null) {
-    console.error(
-      chalk.redBright("ERROR: ") + chalk.red(e.toString()) + os.EOL
-    );
-  }
+  const message =
+    typeof e === "object" && e !== null
+      ? e.toString()
+      : "an internal error occurred";
+  console.error(chalk.redBright("ERROR: ") + chalk.red(message) + os.EOL);
   process.exit(1);
 }
