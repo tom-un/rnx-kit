@@ -1,55 +1,70 @@
 import { isDirectory, isFile } from "@rnx-kit/tools-node";
-import {
-  createDiagnosticWriter,
-  findConfigFile,
-  readConfigFile,
-} from "@rnx-kit/typescript-service";
+import { findConfigFile, readConfigFile } from "@rnx-kit/typescript-service";
 import path from "path";
 import ts from "typescript";
 
 import type { CommandLine } from "./command-line";
 
-export function getTsConfigFileName(
+/**
+ * Resolve a project configuration path to a file, ensuring that the file
+ * exists.
+ *
+ * The path can point to a specific file, or to a directory containing a
+ * `tsconfig.json` file.
+ *
+ * @param project Project configuration path
+ * @returns Path to the resolved configuration file
+ */
+export function resolveConfigFile(project: string): string {
+  const fileOrDirectory = path.normalize(project);
+  if (!fileOrDirectory || isDirectory(fileOrDirectory)) {
+    const projectFile = path.join(fileOrDirectory, "tsconfig.json");
+    if (!isFile(projectFile)) {
+      throw new Error(
+        `Cannot find a tsconfig.json file at the specified directory: ${project}`
+      );
+    }
+    return projectFile;
+  }
+
+  if (!isFile(fileOrDirectory)) {
+    throw new Error(`The specified path does not exist: ${project}`);
+  }
+  return fileOrDirectory;
+}
+
+/**
+ * Ensure that the TypeScript command line contains either a valid project
+ * configuration, or a set of source files. It cannot contain both.
+ *
+ * @param cmdLineTs TypeScript command line
+ * @returns Path to the configuration file, or `undefined` if source files were used instead.
+ */
+export function ensureConfigFileOrSourceFiles(
   cmdLineTs: ts.ParsedCommandLine
 ): string | undefined {
   let configFileName: string | undefined = undefined;
 
   if (cmdLineTs.options.project) {
-    //  A project configuration file was given. Make sure no individual files
-    //  were specified (these concepts are mutually exclusive).
-
+    //  A configuration file was given. Make sure no individual files were
+    //  specified (these concepts are mutually exclusive).
+    //
     if (cmdLineTs.fileNames.length !== 0) {
       throw new Error(
         "Cannot use a TypeScript configuration file and individually named source files together on the command-line"
       );
     }
-
-    const fileOrDirectory = path.normalize(cmdLineTs.options.project);
-    if (!fileOrDirectory || isDirectory(fileOrDirectory)) {
-      configFileName = path.join(fileOrDirectory, "tsconfig.json");
-      if (!isFile(configFileName)) {
-        throw new Error(
-          `Cannot find a tsconfig.json file at the specified directory: ${cmdLineTs.options.project}`
-        );
-      }
-    } else {
-      configFileName = fileOrDirectory;
-      if (!isFile(configFileName)) {
-        throw new Error(
-          `The specified path does not exist: ${cmdLineTs.options.project}`
-        );
-      }
-    }
+    configFileName = resolveConfigFile(cmdLineTs.options.project);
   } else if (cmdLineTs.fileNames.length === 0) {
-    //  A project configuration file was not given, and neither were any
-    //  individual files. Search for a project configuration file.
-
+    //  A configuration file was not given, and neither were any individual
+    //  files. Search for a configuration file.
+    //
     configFileName = findConfigFile(process.cwd());
   }
 
-  //  At this point, we should have either a configuration file or
-  //  individual files.
-
+  //  At this point, we should have either a configuration file or individual
+  //  files.
+  //
   if (cmdLineTs.fileNames.length === 0 && !configFileName) {
     throw new Error(
       "The command-line must include either a TypeScript configuration file or individually named source files"
@@ -59,10 +74,17 @@ export function getTsConfigFileName(
   return configFileName;
 }
 
-export function getTsConfigFromFile(
+/**
+ * Try to read a TypeScript configuration file, if one was specified on the
+ * command-line.
+ *
+ * @param cmdLine Command line
+ * @returns TypeScript configuration file contents, or `undefined` if a config file was not read.
+ */
+export function tryReadTsConfigFile(
   cmdLine: CommandLine
 ): ts.ParsedCommandLine | undefined {
-  const configFileName = getTsConfigFileName(cmdLine.ts);
+  const configFileName = ensureConfigFileOrSourceFiles(cmdLine.ts);
 
   if (configFileName) {
     const parsedConfig = readConfigFile(
@@ -70,17 +92,6 @@ export function getTsConfigFromFile(
       cmdLine.ts.options,
       cmdLine.ts.watchOptions
     );
-    if (!parsedConfig) {
-      throw new Error(
-        `Failed to load TypeScript configuration file '${configFileName}'`
-      );
-    } else if (parsedConfig.errors.length > 0) {
-      const writer = createDiagnosticWriter();
-      parsedConfig.errors.forEach((e) => writer.print(e));
-      throw new Error(
-        `Failed to load TypeScript configuration file '${configFileName}'`
-      );
-    }
 
     // TODO: needed?
     // ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd

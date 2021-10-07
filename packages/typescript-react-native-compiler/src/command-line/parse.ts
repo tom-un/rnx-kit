@@ -11,9 +11,7 @@ function reportParameterDependencyViolation(
 }
 
 function reportUnsupportTscCliArgument(argName: string): never {
-  throw new Error(
-    `tsc command-line parameter '${argName}' is not currently supported`
-  );
+  throw new Error(`tsc command-line parameter '${argName}' is not supported`);
 }
 
 export type ParsedCommandLineRnTs = {

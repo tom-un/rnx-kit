@@ -1,2 +1,2 @@
-export type { CommandLine } from "./parse";
+export type { CommandLine, ParsedCommandLineRnTs } from "./parse";
 export { parseCommandLine } from "./parse";

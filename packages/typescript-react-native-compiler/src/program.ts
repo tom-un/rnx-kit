@@ -5,6 +5,17 @@ import ts from "typescript";
 
 import type { CommandLine } from "./command-line";
 
+/**
+ * Create a TypeScript program object using the given command line.
+ *
+ * If a react-native platform appears on the command-line, the program will
+ * use a react-native module resolver which can handle platform extensions
+ * such as ".ios.ts" and ".native.tsx". Otherwise, the program will use the
+ * standard TypeScript module resolver.
+ *
+ * @param cmdLine Command line
+ * @returns TypeScript program
+ */
 export function createProgram(cmdLine: CommandLine): ts.Program {
   const {
     platform,
@@ -41,7 +52,7 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
     compilerHost.trace = resolverHost.trace.bind(resolverHost);
   } else {
     //  No react-native platform was specified. Use the standard TypeScript
-    //  resolver. Capture module resolution trace messages in a file or on
+    //  resolver. Route module resolution trace messages to a file or to
     //  the console.
     //
     if (traceResolutionLog) {

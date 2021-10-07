@@ -5,7 +5,7 @@ import os from "os";
 import { cli } from "./cli";
 
 try {
-  cli();
+  cli(process.argv);
   process.exit(0);
 } catch (e) {
   const message =
