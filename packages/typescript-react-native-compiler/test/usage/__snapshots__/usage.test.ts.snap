@@ -1,0 +1,42 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Usage > usage prints usage information 1`] = `
+"[97mjest: TypeScript with react-native - Version 0.0.1-1jstest.17[39m                                                      [48;5;68m[97m RN  [39m[39;49m
+                                                                                                                   [48;5;68m[97m  TS [39m[39;49m
+[1m[97mUSAGE[39m[22m
+
+  [94mjest.js [jest options] [tsc options][39m
+
+[1m[97mJEST OPTIONS[39m[22m
+
+  [94m--platform <p>[39m
+  [97mTarget react-native platform. This must refer to a platform which has a react-native implementation, such as
+  ios, android, windows or macos. When given, react-native module resolution is used. Otherwise, modules are resolved
+  using the configured TypeScript strategy.[39m
+
+  [94m--platformExtensions <ext-1>[,<ext-2>[...<ext-N>]][39m
+  [97mList of platform file extensions to use when resolving react-native modules. Resolution always starts with the
+  --platform name, followed by these extensions, ordered from highest precedence (ext-1) to lowest (ext-N).[39m
+
+    [97mExample:[39m
+      [94mjest.js --platform ios --platformExtensions mobile,native[39m
+      [97mResolution of module 'm' searchs for m.ios.* first, then m.mobile.*, m.native.*, and finally m.* (no
+      extension).[39m
+
+  [94m--disableReactNativePackageSubstitution[39m
+  [97mThe react-native resolver maps module references from 'react-native' to the target platform's implementation,
+  such as 'react-native-windows' for Windows, and 'react-native-macos' MacOS. This option disables that behavior.[39m
+
+  [94m--traceReactNativeModuleResolutionErrors[39m
+  [97mWhen the react-native resolver is active, display a detailed report whenever it fails to map a module to a file
+  name.[39m
+
+  [94m--traceResolutionLog <logFile>[39m
+  [97mWrite all resolution trace messages to a log file, instead of to the console. Trace messages are appended to the
+  end of the file, and it is created if it doesn't exist.[39m
+
+[97mFull documentation: https://github.com/microsoft/rnx-kit/tree/main/packages/typescript-react-native-compiler#readme[39m
+
+
+"
+`;
