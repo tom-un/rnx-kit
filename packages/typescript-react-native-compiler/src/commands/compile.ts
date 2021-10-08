@@ -1,5 +1,6 @@
 import { addRange } from "@rnx-kit/tools-language";
 import { createDiagnosticWriter } from "@rnx-kit/typescript-service";
+import os from "os";
 import ts from "typescript";
 
 import type { CommandLine } from "../command-line";
@@ -46,9 +47,11 @@ export function compile(cmdLine: CommandLine): void {
     });
 
     if (errors > 0) {
-      console.log("");
-      console.log(errors === 1 ? "Found 1 error." : `Found ${errors} errors.`);
-      console.log("");
+      console.log(
+        os.EOL +
+          (errors === 1 ? "Found 1 error." : `Found ${errors} errors.`) +
+          os.EOL
+      );
     }
   }
 }

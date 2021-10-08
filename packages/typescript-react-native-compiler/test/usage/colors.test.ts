@@ -1,7 +1,6 @@
 import "jest-extended";
-import os from "os";
 
-import { createUsageColors, UsageColors } from "../../src/usage/colors";
+import { createUsageColors } from "../../src/usage/colors";
 
 describe("Usage > Colors > createUsageColors", () => {
   beforeAll(() => {
