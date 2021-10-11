@@ -1,6 +1,6 @@
 import os from "os";
 
-import { usage } from "../../src/usage";
+import { Usage } from "../../src/usage/usage";
 
 describe("Usage > usage", () => {
   test("prints usage information", () => {
@@ -11,7 +11,8 @@ describe("Usage > usage", () => {
     };
 
     try {
-      usage();
+      const usage = new Usage(80);
+      usage.show();
     } finally {
       console.log = oldLog;
     }

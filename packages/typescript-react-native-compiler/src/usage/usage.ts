@@ -14,9 +14,9 @@ export class Usage {
 
   private pkg: PackageManifest | undefined;
 
-  constructor() {
+  constructor(columns: number) {
     this.colors = createUsageColors();
-    this.columns = Math.min(process.stdout.columns, 120);
+    this.columns = columns;
 
     const { base, name } = path.parse(process.argv[1]);
     this.scriptName = base;
@@ -81,7 +81,7 @@ export class Usage {
     const message = util.format(
       "%s: TypeScript with react-native - Version %s",
       this.scriptNameNoExt,
-      this.pkg?.version ?? "Unknown"
+      this.pkg ? this.pkg.version : "Unknown"
     );
 
     console.log(
@@ -119,6 +119,7 @@ export class Usage {
 }
 
 export function usage(): void {
-  const usage = new Usage();
+  const columns = Math.min(process.stdout.columns, 120);
+  const usage = new Usage(columns);
   usage.show();
 }

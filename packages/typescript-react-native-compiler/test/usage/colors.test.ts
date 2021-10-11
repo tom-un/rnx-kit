@@ -1,24 +1,18 @@
 import "jest-extended";
 
-import { createUsageColors } from "../../src/usage/colors";
+import { createUsageColors, UsageColorMode } from "../../src/usage/colors";
 
 describe("Usage > Colors > createUsageColors", () => {
-  beforeAll(() => {
-    expect(process.stdout.isTTY).toBeTrue();
-  });
-
-  test("creates a colorless implementation when NO_COLOR is set", () => {
-    process.env["NO_COLOR"] = "1";
-    const colors = createUsageColors();
+  test("creates a colorless implementation", () => {
+    const colors = createUsageColors(UsageColorMode.None);
     expect(colors.bold("test")).toEqual("test");
     expect(colors.blue("test")).toEqual("test");
     expect(colors.blueBackground("test")).toEqual("test");
     expect(colors.brightWhite("test")).toEqual("test");
   });
 
-  test("creates a colorful implementation when NO_COLOR is not set", () => {
-    delete process.env["NO_COLOR"];
-    const colors = createUsageColors();
+  test("creates a colorful implementation", () => {
+    const colors = createUsageColors(UsageColorMode.Rich);
     expect(colors.bold("test")).not.toEqual("test");
     expect(colors.bold("test")).toEqual(expect.stringContaining("test"));
     expect(colors.blue("test")).not.toEqual("test");
