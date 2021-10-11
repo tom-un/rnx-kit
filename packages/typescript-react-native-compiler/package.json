@@ -32,7 +32,6 @@
   },
   "devDependencies": {
     "@rnx-kit/jest-preset": "*",
-    "@rnx-kit/tools-react-native": "*",
     "@types/node": "^14.15.0",
     "jest-extended": "^0.11.5",
     "rnx-kit-scripts": "*",
