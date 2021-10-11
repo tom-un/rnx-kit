@@ -1,13 +1,13 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Usage > usage prints usage information 1`] = `
-"[97mjest: TypeScript with react-native - Version 0.0.1-1jstest.17[39m              [48;5;68m[97m RN  [39m[39;49m
+"[97mrn-tsc: TypeScript with react-native - Version 0.0.1-1jstest.17[39m            [48;5;68m[97m RN  [39m[39;49m
                                                                            [48;5;68m[97m  TS [39m[39;49m
 [1m[97mUSAGE[39m[22m
 
-  [94mjest.js [jest options] [tsc options][39m
+  [94mrn-tsc.js [rn-tsc options] [tsc options][39m
 
-[1m[97mJEST OPTIONS[39m[22m
+[1m[97mRN-TSC OPTIONS[39m[22m
 
   [94m--platform <p>[39m
   [97mTarget react-native platform. This must refer to a platform which has a
@@ -21,7 +21,7 @@ exports[`Usage > usage prints usage information 1`] = `
   extensions, ordered from highest precedence (ext-1) to lowest (ext-N).[39m
 
     [97mExample:[39m
-      [94mjest.js --platform ios --platformExtensions mobile,native[39m
+      [94mrn-tsc.js --platform ios --platformExtensions mobile,native[39m
       [97mResolution of module 'm' searchs for m.ios.* first, then m.mobile.*,
       m.native.*, and finally m.* (no extension).[39m
 

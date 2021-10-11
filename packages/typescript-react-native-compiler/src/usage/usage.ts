@@ -8,17 +8,19 @@ import { wrapAndIndent } from "./text";
 export class Usage {
   private colors: UsageColors;
   private columns: number;
+  private eol: string;
 
   private scriptName: string;
   private scriptNameNoExt: string;
 
   private pkg: PackageManifest | undefined;
 
-  constructor(columns: number) {
+  constructor(scriptPath: string, columns: number, eol: string) {
     this.colors = createUsageColors();
     this.columns = columns;
+    this.eol = eol;
 
-    const { base, name } = path.parse(process.argv[1]);
+    const { base, name } = path.parse(scriptPath);
     this.scriptName = base;
     this.scriptNameNoExt = name;
 
@@ -71,8 +73,8 @@ export class Usage {
     if (this.pkg?.homepage) {
       console.log(
         this.colors.brightWhite(`Full documentation: ${this.pkg.homepage}`) +
-          os.EOL +
-          os.EOL
+          this.eol +
+          this.eol
       );
     }
   }
@@ -96,16 +98,16 @@ export class Usage {
   }
 
   section(header: string): void {
-    this.print(0, this.colors.bold(this.colors.brightWhite(header)) + os.EOL);
+    this.print(0, this.colors.bold(this.colors.brightWhite(header)) + this.eol);
   }
 
   commandLine(script: string, params: string): void {
-    this.print(2, this.colors.blue(script + " " + params) + os.EOL);
+    this.print(2, this.colors.blue(script + " " + params) + this.eol);
   }
 
   option(text: string, description: string): void {
     this.print(2, this.colors.blue(text));
-    this.print(2, this.colors.brightWhite(description) + os.EOL);
+    this.print(2, this.colors.brightWhite(description) + this.eol);
   }
 
   exampleHeader(): void {
@@ -114,12 +116,12 @@ export class Usage {
 
   example(text: string, description: string): void {
     this.print(6, this.colors.blue(text));
-    this.print(6, this.colors.brightWhite(description) + os.EOL);
+    this.print(6, this.colors.brightWhite(description) + this.eol);
   }
 }
 
 export function usage(): void {
   const columns = Math.min(process.stdout.columns, 120);
-  const usage = new Usage(columns);
+  const usage = new Usage(process.argv[1], columns, os.EOL);
   usage.show();
 }

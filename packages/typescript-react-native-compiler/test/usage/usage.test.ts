@@ -11,7 +11,7 @@ describe("Usage > usage", () => {
     };
 
     try {
-      const usage = new Usage(80);
+      const usage = new Usage("rn-tsc.js", 80, "\n");
       usage.show();
     } finally {
       console.log = oldLog;
